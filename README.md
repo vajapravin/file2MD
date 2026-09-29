@@ -1,85 +1,215 @@
 # file2MD
 
-> Convert files to clean, readable Markdown.
+[![CI](https://github.com/vajapravin/file2md/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/vajapravin/file2md/actions)
 
-file2MD is an open-source web application that converts supported document formats into well-structured Markdown files. It preserves meaningful document structure — headings, paragraphs, lists, tables, and links — using Microsoft's [markitdown](https://github.com/microsoft/markitdown) library.
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 
-## Supported Formats
+A self-hosted, privacy-first web application that converts documents and data
+files into clean, readable, structured Markdown (.md). Powered by Microsoft's
+[MarkItDown](https://github.com/microsoft/markitdown) engine, file2MD preserves
+essential document hierarchy — headings, tables, lists, links, and code blocks —
+without exposing your sensitive files to third-party cloud services. Built with a
+FastAPI backend, a modern React single-page app styled with Tailwind CSS, and
+packaged with Docker Compose so it runs anywhere in minutes.
 
-| Format | Extension | Status |
-|--------|-----------|--------|
-| PDF | `.pdf` | 🚧 Planned |
-| Word | `.docx` | 🚧 Planned |
-| Plain Text | `.txt` | 🚧 Planned |
-| HTML | `.html` | 🚧 Planned |
-| CSV | `.csv` | 🚧 Planned |
-| JSON | `.json` | 🚧 Planned |
-| Markdown | `.md` | 🚧 Planned |
+![file2MD dashboard](assets/dashboard.png)
 
-> Format support is listed only after implementation and tests exist.
+🌐 **Live demo:** [https://file2md.vajapravin.me/](https://file2md.vajapravin.me/)
 
-## Architecture
+## 📸 Screens
 
-file2MD is composed of two independent applications:
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="assets/upload.png" alt="File Upload" />
+      <br /><sub><b>File Upload</b> — intuitive drag-and-drop with instant type and size validation</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="assets/dashboard.png" alt="Workspace Dashboard" />
+      <br /><sub><b>Workspace Dashboard</b> — batch conversion queue with per-file status and progress</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="assets/preview.png" alt="Markdown Preview" />
+      <br /><sub><b>Markdown Preview</b> — live split-pane preview with rendered view and raw syntax</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="assets/batch.png" alt="Export and Download" />
+      <br /><sub><b>Export & Download</b> — one-click clipboard copy or download as clean .md files</sub>
+    </td>
+  </tr>
+</table>
 
-- **`backend/`** — Python 3.12, FastAPI, Pydantic, modular conversion services
-- **`frontend/`** — React, TypeScript, Vite, Tailwind CSS
+## 🏗 Architecture
 
-They communicate exclusively through documented HTTP APIs (`/api/v1/`).
+file2MD separates concerns across distinct layers to ensure security, maintainability, and modularity:
 
-## Quick Start
+1. **React SPA (frontend)** — a responsive interface built with React 19,
+   TypeScript, and Tailwind CSS. Features drag-and-drop uploads, instant client-side
+   validation, live markdown preview with syntax highlighting, and batch export.
+2. **FastAPI backend** — a versioned REST API (`/api/v1/`). Handles file upload
+   reception, MIME-sniffing, validation checks, and dispatches files to dedicated
+   conversion workers.
+3. **Modular Conversion Strategy (MarkItDown)** — wraps Microsoft's `markitdown`
+   library using the Strategy pattern (`BaseConverter`). Each document format has
+   an isolated converter with custom normalization and structure extraction.
+4. **Security & Sanitization Layer** — validates file extensions, MIME types, and
+   binary signatures (magic bytes). Enforces upload limits and wraps conversions in
+   strict timeout handlers.
+5. **Ephemeral Sandbox Processing** — files are processed in isolated temporary
+   directories with cryptographically random UUIDs. Temp files are purged immediately
+   after conversion. No databases or persistent storage are used.
 
-### Prerequisites
+## ✨ Core Features
 
-- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
+- **Multi-format support** — converts PDF, Word (`.docx`), Plain Text (`.txt`),
+  HTML (`.html`), CSV (`.csv`), JSON (`.json`), and normalizes existing Markdown (`.md`).
+- **Structure preservation** — maintains headings, paragraphs, bullet/numbered
+  lists, nested tables, code fences, and hyperlinks.
+- **Interactive Markdown preview** — side-by-side or tabbed view showing rendered
+  HTML preview alongside the raw Markdown code.
+- **Batch processing** — upload multiple files simultaneously and track individual
+  conversion statuses.
+- **One-click copy & export** — copy Markdown directly to your clipboard or download
+  individual `.md` files.
+- **Zero-retention privacy** — uploaded files are processed strictly in memory/ephemeral
+  storage and wiped immediately upon completion.
+- **Actionable error feedback** — clear, descriptive error messages for corrupted,
+  password-protected, or unsupported files.
+- **Light & dark mode** — polished modern interface designed for focus.
+- **Self-contained deployment** — simple one-command orchestration with Docker Compose.
 
-### Run with Docker Compose
+## 🔒 How file2MD protects your data
+
+- **Zero persistence.** file2MD contains no database, no caching layer, and no analytics
+  trackers. Once the converted Markdown is returned, the source file is gone.
+- **Triple-layer file validation.** Every upload is inspected across three layers:
+  extension whitelist, declared MIME type, and magic byte signature inspection to prevent
+  file spoofing.
+- **Isolated execution & safe filenames.** Uploads are written to dedicated temporary
+  directories using generated UUIDs, mitigating path traversal and filesystem clashes.
+- **No script or macro execution.** Documents are parsed strictly for text and structural
+  nodes; embedded macros or JavaScript payloads are never executed.
+- **Timeout & resource protection.** Conversions run under strict timeout envelopes and
+  size boundaries to prevent denial-of-service from decompression bombs or corrupted files.
+- **Configurable limits.** Administrators can configure upload limits (`MAX_UPLOAD_SIZE_MB`),
+  request timeouts, and CORS origins via environment variables.
+
+## 🤔 Why file2MD instead of cloud document converters?
+
+Most online converters upload your files to third-party cloud infrastructure where
+data may be cached, indexed, or logged.
+
+**Pros of file2MD**
+
+- **Your documents never leave your control.** Ideal for proprietary code, legal
+  contracts, financial sheets, and sensitive personal notes.
+- **LLM & RAG-ready Markdown.** Markdown produced by MarkItDown is token-efficient
+  and structured specifically for LLM pipelines and knowledge bases.
+- **100% Free & Open Source.** No subscription tiers, conversion credits, or file
+  count limits.
+- **Reproducible & self-hosted.** Runs locally or on private VPS instances via Docker.
+
+**Cons (equally honest)**
+
+- **Self-hosted responsibility.** You manage your own container host and updates.
+- **OCR requires optional configuration.** High-accuracy image OCR requires an
+  explicitly configured LLM vision client or local engine.
+- **No cloud sync.** It is a converter tool, not a cloud document storage vault.
+
+## 🚀 Installation
+
+**Prerequisites:** [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/).
+
+### 1. Clone
 
 ```bash
-git clone https://github.com/your-org/file2MD.git
-cd file2MD
-docker compose up --build
+git clone https://github.com/vajapravin/file2md.git
+cd file2md
 ```
 
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:8000/api/v1/health
-- **API Docs**: http://localhost:8000/docs
+### 2. Configure environment (optional)
 
-### Local Development
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
 
-See [docs/development.md](docs/development.md) for full instructions.
+Adjust variables if needed (e.g., `MAX_UPLOAD_SIZE_MB=50`, `CONVERSION_TIMEOUT_SECONDS=60`).
 
-## Documentation
+### 3. Launch with Docker Compose
 
-- [Architecture](docs/architecture.md)
-- [API Reference](docs/api.md)
-- [Development Setup](docs/development.md)
-- [Docker Guide](docs/docker.md)
-- [Security](docs/security.md)
-- [Adding a Format](docs/adding-a-format.md)
+```bash
+docker compose up --build -d
+```
 
-## Contributing
+Once running, access the services:
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+| URL | What |
+|---|---|
+| http://localhost:5173 | file2MD Web Application |
+| http://localhost:8000/docs | Interactive Swagger API Documentation |
+| http://localhost:8000/api/v1/health | Backend Health Check |
 
-## Security
+To stop the containers:
 
-See [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
+```bash
+docker compose down
+```
 
-## License
+## 🧪 Development
+
+### Backend (Python 3.12+)
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+
+# Lint and formatting
+ruff check src/ tests/
+ruff format --check src/ tests/
+
+# Type checking
+mypy src/
+
+# Run test suite
+pytest
+```
+
+### Frontend (Node 20+)
+
+```bash
+cd frontend
+npm install
+
+# Dev server with HMR
+npm run dev
+
+# Tests & Linting
+npm test
+npm run lint
+npm run typecheck
+```
+
+## 🗺 Roadmap
+
+- [x] Initial multi-format engine (PDF, DOCX, TXT, HTML, CSV, JSON, MD)
+- [x] Live side-by-side Markdown preview and clipboard copy
+- [x] Strict security sandbox, mime-validation, and timeout limits
+- [ ] OCR extraction for images using vision models / Tesseract
+- [ ] Multi-file archive support (converting all contents of `.zip`)
+- [ ] CLI utility (`file2md-cli`) for terminal workflows
+- [ ] Syntax highlighting export for code blocks in converted output
+
+## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
-
-### Third-Party Licenses
-
-file2MD depends on open-source libraries. Key dependencies and their licenses:
-
-| Library | License |
-|---------|---------|
-| [markitdown](https://github.com/microsoft/markitdown) | MIT |
-| [FastAPI](https://fastapi.tiangolo.com/) | MIT |
-| [React](https://react.dev/) | MIT |
-| [Vite](https://vite.dev/) | MIT |
-| [Tailwind CSS](https://tailwindcss.com/) | MIT |
-
-A complete list is available in each application's dependency manifest (`backend/pyproject.toml`, `frontend/package.json`).
