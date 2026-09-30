@@ -3,7 +3,7 @@ name = "file2md"
 version = "0.1.0"
 description = "Backend API for file2MD — convert files to clean Markdown"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.12,<3.15"
 dependencies = [
     "fastapi~=0.115.0",
