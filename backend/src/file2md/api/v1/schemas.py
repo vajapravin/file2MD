@@ -41,6 +41,22 @@ class ConvertResponse(BaseModel):
     metadata: ConvertMetadata
 
 
+class BatchConvertItem(BaseModel):
+    """Individual item result in a batch conversion response."""
+
+    filename: str = Field(..., description="Filename")
+    status: str = Field(..., description="Result status: 'success' or 'error'")
+    markdown: str | None = Field(default=None, description="Markdown if successful")
+    error: str | None = Field(default=None, description="Error message if failed")
+    metadata: ConvertMetadata | None = Field(default=None, description="Metadata if successful")
+
+
+class BatchConvertResponse(BaseModel):
+    """Batch conversion response."""
+
+    results: List[BatchConvertItem] = Field(..., description="Array of file conversion results")
+
+
 class ErrorResponse(BaseModel):
     """Standard error response format."""
 
