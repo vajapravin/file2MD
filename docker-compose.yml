@@ -5,18 +5,18 @@ services:
       dockerfile: Dockerfile
     container_name: file2md-backend
     ports:
-      - "${BACKEND_PORT:-8085}:8085"
+      - "${BACKEND_PORT:-8086}:8086"
     environment:
       - APP_ENV=development
       - APP_DEBUG=true
       - HOST=0.0.0.0
-      - PORT=8085
-      - CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:8085
-    command: ["uvicorn", "file2md.main:app", "--host", "0.0.0.0", "--port", "8085", "--reload"]
+      - PORT=8086
+      - CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:8086
+    command: ["uvicorn", "file2md.main:app", "--host", "0.0.0.0", "--port", "8086", "--reload"]
     volumes:
       - ./backend/src:/app/src:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8085/api/v1/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8086/api/v1/health"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -31,8 +31,8 @@ services:
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
     environment:
-      - BACKEND_URL=http://backend:8085
-      - VITE_API_BASE_URL=http://localhost:8085
+      - BACKEND_URL=http://backend:8086
+      - VITE_API_BASE_URL=http://localhost:8086
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/index.html:/app/index.html

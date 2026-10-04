@@ -24,7 +24,7 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PORT=8085 \
+    PORT=8086 \
     HOST=0.0.0.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -50,9 +50,9 @@ RUN mkdir -p /tmp/file2md && chown -R appuser:appgroup /tmp/file2md /app
 
 USER appuser
 
-EXPOSE 8085
+EXPOSE 8086
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8085/api/v1/health || exit 1
+    CMD curl -f http://localhost:8086/api/v1/health || exit 1
 
-CMD ["uvicorn", "file2md.main:app", "--host", "0.0.0.0", "--port", "8085"]
+CMD ["uvicorn", "file2md.main:app", "--host", "0.0.0.0", "--port", "8086"]
