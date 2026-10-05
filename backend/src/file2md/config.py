@@ -26,14 +26,18 @@ class Settings(BaseSettings):
 
     # --- Server ---
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    PORT: int = 8086
 
     # --- Upload & Processing Limits ---
     MAX_UPLOAD_SIZE_MB: int = 50
     CONVERSION_TIMEOUT_SECONDS: int = 60
 
     # --- CORS ---
-    CORS_ALLOWED_ORIGINS: Union[List[str], str] = ["http://localhost:5173"]
+    CORS_ALLOWED_ORIGINS: Union[List[str], str] = [
+        "http://localhost:5173",
+        "https://file2md.vajapravin.me",
+        "http://file2md.vajapravin.me",
+    ]
 
     @field_validator("CORS_ALLOWED_ORIGINS", mode="before")
     @classmethod
