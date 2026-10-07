@@ -1,7 +1,8 @@
 import { ConvertResponse, BatchConvertResponse, FormatInfo } from "../types";
 
+// Default to relative "/api/v1" so it works across both local development and production domains
 const API_BASE = import.meta.env.VITE_API_BASE_URL
-  ? `${import.meta.env.VITE_API_BASE_URL}/api/v1`
+  ? `${import.meta.env.VITE_API_BASE_URL.replace(/\/$/, "")}/api/v1`
   : "/api/v1";
 
 export async function fetchHealth(): Promise<{ status: string; version: string }> {
