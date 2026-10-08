@@ -35,16 +35,6 @@ packaged with Docker Compose so it runs anywhere in minutes.
       <br /><sub><b>Workspace Dashboard</b> — batch conversion queue with per-file status and progress</sub>
     </td>
   </tr>
-  <tr>
-    <td width="50%" align="center">
-      <img src="assets/preview.png" alt="Markdown Preview" />
-      <br /><sub><b>Markdown Preview</b> — live split-pane preview with rendered view and raw syntax</sub>
-    </td>
-    <td width="50%" align="center">
-      <img src="assets/batch.png" alt="Export and Download" />
-      <br /><sub><b>Export & Download</b> — one-click clipboard copy or download as clean .md files</sub>
-    </td>
-  </tr>
 </table>
 
 ## 🏗 Architecture
