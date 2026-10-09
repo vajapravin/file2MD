@@ -12,16 +12,18 @@ services:
       - HOST=0.0.0.0
       - PORT=8086
       - CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:8086,https://file2md.vajapravin.me,http://file2md.vajapravin.me
-    command: ["uvicorn", "file2md.main:app", "--host", "0.0.0.0", "--port", "8086", "--reload"]
+    command: [ "uvicorn", "file2md.main:app", "--host", "0.0.0.0", "--port", "8086", "--reload" ]
     volumes:
       - ./backend/src:/app/src:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8086/api/v1/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8086/api/v1/health" ]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 5s
     restart: unless-stopped
+    networks:
+      - app-net
 
   frontend:
     build:
@@ -40,7 +42,9 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - app-net
 
 networks:
-  default:
-    name: file2md-network
+  app-net:
+    driver: bridge
