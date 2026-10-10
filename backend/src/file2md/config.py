@@ -29,8 +29,19 @@ class Settings(BaseSettings):
     PORT: int = 8086
 
     # --- Upload & Processing Limits ---
-    MAX_UPLOAD_SIZE_MB: int = 50
-    CONVERSION_TIMEOUT_SECONDS: int = 60
+    MAX_UPLOAD_SIZE_MB: int = 60
+    CONVERSION_TIMEOUT_SECONDS: int = 120
+
+    # --- Redis & Background Jobs ---
+    REDIS_URL: str = "redis://redis:6379/0"
+    JOB_TTL_SECONDS: int = 3600  # 1 hour expiration for completed results
+
+    # --- Chunking & Parallelization ---
+    CHUNK_SPLIT_THRESHOLD_BYTES: int = 5 * 1024 * 1024  # 5 MB threshold
+    CHUNK_PARALLEL_WORKERS: int = 4
+    PDF_CHUNK_PAGE_SIZE: int = 15  # pages per chunk
+    CSV_CHUNK_ROW_SIZE: int = 1000  # rows per chunk
+    TXT_CHUNK_LINE_SIZE: int = 2000  # lines per chunk
 
     # --- CORS ---
     CORS_ALLOWED_ORIGINS: Union[List[str], str] = [
