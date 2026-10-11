@@ -17,6 +17,7 @@ services:
     command: [ "uvicorn", "file2md.main:app", "--host", "0.0.0.0", "--port", "8086", "--reload" ]
     volumes:
       - ./backend/src:/app/src:ro
+      - ./backend/tests:/app/tests:ro
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8086/api/v1/health" ]
       interval: 10s
