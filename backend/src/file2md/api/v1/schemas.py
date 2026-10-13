@@ -57,6 +57,23 @@ class BatchConvertResponse(BaseModel):
     results: List[BatchConvertItem] = Field(..., description="Array of file conversion results")
 
 
+class AsyncJobResponse(BaseModel):
+    """Status and result response for an asynchronous or split-parallel conversion job."""
+
+    job_id: str = Field(..., description="Unique job identifier")
+    filename: str = Field(..., description="Uploaded filename")
+    extension: str = Field(..., description="File extension")
+    size_bytes: int = Field(..., description="File size in bytes")
+    status: str = Field(..., description="Job status: pending, splitting, processing, merging, completed, failed")
+    progress: int = Field(..., description="Overall progress percentage (0-100)")
+    message: str = Field(..., description="Human-readable progress description")
+    chunks_total: int = Field(default=1, description="Total number of chunks")
+    chunks_completed: int = Field(default=0, description="Completed chunk count")
+    markdown: str | None = Field(default=None, description="Final markdown when completed")
+    error: str | None = Field(default=None, description="Error message if failed")
+    conversion_time_ms: int | None = Field(default=None, description="Total elapsed time in ms")
+
+
 class ErrorResponse(BaseModel):
     """Standard error response format."""
 

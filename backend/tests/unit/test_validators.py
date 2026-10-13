@@ -41,7 +41,7 @@ def test_validate_file_metadata_rejects_unsupported_extension() -> None:
 
 
 def test_validate_file_metadata_rejects_oversized_file() -> None:
-    oversized = 51 * 1024 * 1024 # 51 MB
+    oversized = 65 * 1024 * 1024  # 65 MB (exceeds 60 MB limit)
     with pytest.raises(HTTPException) as exc_info:
         validate_file_metadata("huge.pdf", "application/pdf", oversized)
     assert exc_info.value.status_code == 413

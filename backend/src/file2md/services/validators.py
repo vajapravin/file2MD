@@ -34,8 +34,8 @@ def sanitize_filename(raw_filename: str) -> str:
     if not raw_filename or not raw_filename.strip():
         return "unnamed_document"
 
-    # Remove path separators
-    name = Path(raw_filename).name
+    # Normalize backslashes and remove path separators
+    name = Path(raw_filename.replace("\\", "/")).name
 
     # Remove null bytes and control characters
     name = re.sub(r"[\x00-\x1f\x7f]", "", name)

@@ -1,10 +1,16 @@
-"""Conversion endpoints for single and batch file uploads."""
+"""Conversion endpoints for single, batch, and parallel chunking file uploads."""
 
+import asyncio
+import shutil
 import time
-from typing import List
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+import uuid
+from pathlib import Path
+from typing import Any, List, Optional
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import JSONResponse
 import structlog
 from file2md.api.v1.schemas import (
+    AsyncJobResponse,
     BatchConvertItem,
     BatchConvertResponse,
     ConvertMetadata,
@@ -12,6 +18,8 @@ from file2md.api.v1.schemas import (
 )
 from file2md.services.converter import orchestrator
 from file2md.services.file_cleanup import isolated_temp_directory
+from file2md.services.job_manager import job_manager
+from file2md.services.splitter import should_split_document
 from file2md.services.validators import (
     sanitize_filename,
     validate_file_metadata,
@@ -22,13 +30,47 @@ logger = structlog.get_logger()
 router = APIRouter(tags=["Conversion"])
 
 
+async def _run_parallel_job_with_cleanup(
+    job_id: str,
+    file_path: Path,
+    ext: str,
+    safe_name: str,
+    temp_dir: Path,
+    start_time: float,
+) -> None:
+    """Execute parallel job in background and ensure temp directory cleanup upon completion."""
+    try:
+        await job_manager.execute_parallel_job(
+            job_id, file_path, ext, safe_name, temp_dir, start_time
+        )
+    finally:
+        try:
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
+        except Exception as exc:
+            logger.warning("async_temp_cleanup_failed", temp_dir=str(temp_dir), error=str(exc))
+
+
 @router.post(
     "/convert",
-    response_model=ConvertResponse,
-    summary="Convert a single file to Markdown",
-    description="Accepts a supported document or data file and returns converted, clean Markdown text.",
+    summary="Convert a single file to Markdown (Sync or Parallel Async)",
+    description=(
+        "Converts a document to Markdown. Large files or multi-page documents are automatically "
+        "split and processed in parallel across worker processes, returning an HTTP 202 Accepted "
+        "job with real-time status polling."
+    ),
+    responses={
+        200: {"model": ConvertResponse, "description": "Instant synchronous conversion result"},
+        202: {"model": AsyncJobResponse, "description": "Asynchronous parallel chunking job created"},
+    },
 )
-async def convert_file(file: UploadFile = File(...)) -> ConvertResponse:
+async def convert_file(
+    file: UploadFile = File(...),
+    mode: Optional[str] = Query(
+        default="auto",
+        description="Conversion execution mode: 'auto' (split if large), 'sync' (force single-pass), 'async'",
+    ),
+) -> Any:
     start_time = time.perf_counter()
 
     raw_filename = file.filename or "uploaded_file"
@@ -42,12 +84,46 @@ async def convert_file(file: UploadFile = File(...)) -> ConvertResponse:
     ext = validate_file_metadata(safe_name, file.content_type, size_bytes)
     validate_file_signature(ext, content[:16])
 
-    # Isolated processing
-    async with isolated_temp_directory() as temp_dir:
-        temp_file = temp_dir / safe_name
-        temp_file.write_bytes(content)
+    # Create isolated temp folder
+    base_dir = Path("/tmp/file2md")
+    base_dir.mkdir(parents=True, exist_ok=True)
+    session_id = uuid.uuid4().hex
+    temp_dir = base_dir / session_id
+    temp_dir.mkdir(parents=True, exist_ok=True)
 
+    temp_file = temp_dir / safe_name
+    temp_file.write_bytes(content)
+
+    # Check whether to trigger parallel splitting
+    is_parallel = (mode == "async") or (
+        mode != "sync" and should_split_document(temp_file, ext, size_bytes)
+    )
+
+    if is_parallel:
+        job_id = uuid.uuid4().hex
+        job_data = await job_manager.create_job(job_id, safe_name, ext, size_bytes)
+
+        # Dispatch background parallel conversion pipeline
+        asyncio.create_task(
+            _run_parallel_job_with_cleanup(
+                job_id, temp_file, ext, safe_name, temp_dir, start_time
+            )
+        )
+
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content=job_data,
+        )
+
+    # Fast-path synchronous conversion
+    try:
         markdown = await orchestrator.convert(temp_file, ext, safe_name)
+    finally:
+        try:
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
+        except Exception as exc:
+            logger.warning("sync_temp_cleanup_failed", temp_dir=str(temp_dir), error=str(exc))
 
     elapsed_ms = int((time.perf_counter() - start_time) * 1000)
 
@@ -62,11 +138,27 @@ async def convert_file(file: UploadFile = File(...)) -> ConvertResponse:
     )
 
 
+@router.get(
+    "/jobs/{job_id}",
+    response_model=AsyncJobResponse,
+    summary="Get status and progress of an asynchronous/split conversion job",
+    description="Polls real-time progress of parallel chunk conversion and retrieves final Markdown upon completion.",
+)
+async def get_job_status(job_id: str) -> AsyncJobResponse:
+    job = await job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Conversion job '{job_id}' not found or expired.",
+        )
+    return AsyncJobResponse(**job)
+
+
 @router.post(
     "/convert/batch",
     response_model=BatchConvertResponse,
     summary="Batch convert multiple files to Markdown",
-    description="Converts multiple files in parallel and returns individual conversion results.",
+    description="Converts multiple files and returns individual conversion results.",
 )
 async def convert_batch(files: List[UploadFile] = File(...)) -> BatchConvertResponse:
     if not files:

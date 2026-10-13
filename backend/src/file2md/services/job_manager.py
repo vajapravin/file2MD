@@ -73,10 +73,13 @@ class JobManager:
 
     def __init__(self) -> None:
         self._redis: Optional[Redis] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
 
     async def get_redis(self) -> Redis:
-        """Get or initialize the async Redis connection."""
-        if self._redis is None:
+        """Get or initialize the async Redis connection bound to the running event loop."""
+        loop = asyncio.get_running_loop()
+        if self._redis is None or self._loop != loop:
+            self._loop = loop
             settings = get_settings()
             self._redis = Redis.from_url(
                 settings.REDIS_URL,
