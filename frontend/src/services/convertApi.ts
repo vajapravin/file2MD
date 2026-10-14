@@ -1,4 +1,4 @@
-import { ConvertResponse, BatchConvertResponse, FormatInfo } from "../types";
+import { ConvertResponse, BatchConvertResponse, FormatInfo, AsyncJobResponse } from "../types";
 
 // Default to relative "/api/v1" so it works across both local development and production domains
 const API_BASE = import.meta.env.VITE_API_BASE_URL
@@ -22,7 +22,19 @@ export async function fetchSupportedFormats(): Promise<FormatInfo[]> {
   return data.formats;
 }
 
-export async function convertSingleFile(file: File): Promise<ConvertResponse> {
+export async function fetchJobStatus(jobId: string): Promise<AsyncJobResponse> {
+  const res = await fetch(`${API_BASE}/jobs/${jobId}`);
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to fetch job status (${res.statusText})`);
+  }
+  return res.json();
+}
+
+export async function convertSingleFile(
+  file: File,
+  onProgress?: (job: AsyncJobResponse) => void
+): Promise<ConvertResponse> {
   const formData = new FormData();
   formData.append("file", file, file.name);
 
@@ -32,6 +44,35 @@ export async function convertSingleFile(file: File): Promise<ConvertResponse> {
   });
 
   const data = await res.json();
+
+  if (res.status === 202) {
+    // Large file queued for parallel chunking: poll until finished
+    const initialJob = data as AsyncJobResponse;
+    onProgress?.(initialJob);
+
+    const pollIntervalMs = 800;
+    const maxAttempts = 600; // ~8 minutes limit
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      const job = await fetchJobStatus(initialJob.job_id);
+      onProgress?.(job);
+
+      if (job.status === "completed") {
+        if (job.result) {
+          return job.result;
+        }
+        throw new Error("Parallel conversion completed but no output was found.");
+      }
+
+      if (job.status === "failed") {
+        throw new Error(job.error || "Parallel chunk conversion failed.");
+      }
+    }
+
+    throw new Error("Parallel conversion timed out. Please try again.");
+  }
+
   if (!res.ok) {
     throw new Error(data.detail || data.error || "File conversion failed.");
   }

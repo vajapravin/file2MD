@@ -54,17 +54,34 @@ export function App() {
   const convertFileItem = async (item: UploadedFileItem) => {
     // Set status to uploading
     setFiles((prev) =>
-      prev.map((f) => (f.id === item.id ? { ...f, status: "uploading", error: undefined } : f))
+      prev.map((f) => (f.id === item.id ? { ...f, status: "uploading", progress: 0, error: undefined } : f))
     );
 
     try {
-      const response = await convertSingleFile(item.file);
+      const response = await convertSingleFile(item.file, (job) => {
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === item.id
+              ? {
+                  ...f,
+                  status: "processing",
+                  progress: job.progress_pct,
+                  totalChunks: job.total_chunks,
+                  processedChunks: job.processed_chunks,
+                  jobMessage: job.message,
+                }
+              : f
+          )
+        );
+      });
+
       setFiles((prev) =>
         prev.map((f) =>
           f.id === item.id
             ? {
                 ...f,
                 status: "success",
+                progress: 100,
                 markdown: response.markdown,
                 metadata: response.metadata,
               }

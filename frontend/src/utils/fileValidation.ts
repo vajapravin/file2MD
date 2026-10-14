@@ -10,7 +10,7 @@ export const ALLOWED_EXTENSIONS = [
   ".markdown",
 ];
 
-export const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
+export const MAX_FILE_SIZE_BYTES = 60 * 1024 * 1024; // 60 MB
 
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -34,7 +34,7 @@ export function validateFile(file: File): { valid: boolean; error?: string } {
   if (file.size > MAX_FILE_SIZE_BYTES) {
     return {
       valid: false,
-      error: `File exceeds maximum limit of 50 MB (${formatFileSize(file.size)}).`,
+      error: `File exceeds maximum limit of 60 MB (${formatFileSize(file.size)}).`,
     };
   }
 
