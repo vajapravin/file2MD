@@ -59,8 +59,17 @@ export async function convertSingleFile(
       onProgress?.(job);
 
       if (job.status === "completed") {
-        if (job.result) {
-          return job.result;
+        if (job.markdown !== undefined && job.markdown !== null) {
+          return {
+            filename: job.filename,
+            original_format: job.extension.replace(/^\./, ""),
+            markdown: job.markdown,
+            metadata: {
+              size_bytes: job.size_bytes,
+              conversion_time_ms: job.conversion_time_ms || 0,
+              parallel_chunks: job.chunks_total,
+            },
+          };
         }
         throw new Error("Parallel conversion completed but no output was found.");
       }

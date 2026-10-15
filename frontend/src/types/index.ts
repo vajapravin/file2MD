@@ -19,16 +19,17 @@ export interface ConvertResponse {
 
 export interface AsyncJobResponse {
   job_id: string;
-  status: "processing" | "completed" | "failed";
+  status: "pending" | "splitting" | "processing" | "merging" | "completed" | "failed";
   filename: string;
-  original_format: string;
-  total_chunks: number;
-  processed_chunks: number;
-  progress_pct: number;
-  estimated_time_ms?: number;
-  message?: string;
-  result?: ConvertResponse;
-  error?: string;
+  extension: string;
+  size_bytes: number;
+  progress: number;
+  message: string;
+  chunks_total: number;
+  chunks_completed: number;
+  markdown?: string | null;
+  error?: string | null;
+  conversion_time_ms?: number | null;
 }
 
 export interface BatchItemResult {

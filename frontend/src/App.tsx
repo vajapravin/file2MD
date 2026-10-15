@@ -65,9 +65,9 @@ export function App() {
               ? {
                   ...f,
                   status: "processing",
-                  progress: job.progress_pct,
-                  totalChunks: job.total_chunks,
-                  processedChunks: job.processed_chunks,
+                  progress: job.progress,
+                  totalChunks: job.chunks_total,
+                  processedChunks: job.chunks_completed,
                   jobMessage: job.message,
                 }
               : f

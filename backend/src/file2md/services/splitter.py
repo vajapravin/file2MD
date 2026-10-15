@@ -44,6 +44,17 @@ def should_split_document(file_path: Path, ext: str, size_bytes: int) -> bool:
             logger.warning("pdf_page_check_failed", error=str(exc))
             return False
 
+    # For CSVs, also check row count even if file is compact
+    if ext.lower() == ".csv":
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                for count, _ in enumerate(f):
+                    if count >= settings.CSV_CHUNK_ROW_SIZE * 3:
+                        return True
+        except Exception as exc:
+            logger.warning("csv_row_check_failed", error=str(exc))
+            return False
+
     return False
 
 

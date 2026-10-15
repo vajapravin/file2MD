@@ -180,7 +180,10 @@ export const FileList: React.FC<FileListProps> = ({
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                       </svg>
                       <span>
-                        Processing chunk {item.processedChunks ?? 0} of {item.totalChunks ?? "?"}
+                        {item.jobMessage ||
+                          (item.totalChunks && item.totalChunks > 1
+                            ? `Processing chunk ${item.processedChunks ?? 0} of ${item.totalChunks}`
+                            : "Processing chunks in parallel...")}
                       </span>
                     </span>
                     <span className="font-bold text-indigo-700 dark:text-indigo-300">
