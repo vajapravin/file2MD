@@ -35,9 +35,11 @@ def should_split_document(file_path: Path, ext: str, size_bytes: int) -> bool:
     # For PDFs, also check page count even if file size is below threshold (e.g., text-dense PDFs)
     if ext.lower() == ".pdf":
         try:
+            import sys
+            sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
             from pypdf import PdfReader
 
-            reader = PdfReader(str(file_path))
+            reader = PdfReader(str(file_path), strict=False)
             total_pages = len(reader.pages)
             return total_pages > settings.PDF_CHUNK_PAGE_SIZE
         except Exception as exc:
@@ -62,13 +64,27 @@ def split_pdf(
     file_path: Path, output_dir: Path, pages_per_chunk: int | None = None
 ) -> List[DocumentChunk]:
     """Split a multi-page PDF into smaller PDF chunks for parallel conversion."""
+    import sys
+    sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
     from pypdf import PdfReader, PdfWriter
 
     settings = get_settings()
     chunk_size = pages_per_chunk or settings.PDF_CHUNK_PAGE_SIZE
 
-    reader = PdfReader(str(file_path))
-    total_pages = len(reader.pages)
+    try:
+        reader = PdfReader(str(file_path), strict=False)
+        total_pages = len(reader.pages)
+    except Exception as exc:
+        logger.warning("pdf_split_read_failed", error=str(exc))
+        return [
+            DocumentChunk(
+                chunk_index=0,
+                total_chunks=1,
+                file_path=file_path,
+                extension=".pdf",
+                metadata={"fallback_reason": f"PdfReader failed: {exc}"},
+            )
+        ]
 
     if total_pages <= chunk_size:
         return [
@@ -84,38 +100,55 @@ def split_pdf(
     chunks: List[DocumentChunk] = []
     chunk_count = (total_pages + chunk_size - 1) // chunk_size
 
-    for idx, start_page in enumerate(range(0, total_pages, chunk_size)):
-        end_page = min(start_page + chunk_size, total_pages)
-        writer = PdfWriter()
+    try:
+        for idx, start_page in enumerate(range(0, total_pages, chunk_size)):
+            end_page = min(start_page + chunk_size, total_pages)
+            writer = PdfWriter()
 
-        for page_num in range(start_page, end_page):
-            writer.add_page(reader.pages[page_num])
+            # Using append with import_outline=False prevents deeply nested outline recursion
+            try:
+                writer.append(reader, pages=(start_page, end_page), import_outline=False)
+            except Exception:
+                for page_num in range(start_page, end_page):
+                    writer.add_page(reader.pages[page_num])
 
-        chunk_path = output_dir / f"chunk_{idx:04d}.pdf"
-        with open(chunk_path, "wb") as f_out:
-            writer.write(f_out)
+            chunk_path = output_dir / f"chunk_{idx:04d}.pdf"
+            with open(chunk_path, "wb") as f_out:
+                writer.write(f_out)
 
-        chunks.append(
-            DocumentChunk(
-                chunk_index=idx,
-                total_chunks=chunk_count,
-                file_path=chunk_path,
-                extension=".pdf",
-                metadata={
-                    "start_page": start_page + 1,
-                    "end_page": end_page,
-                    "total_pages": total_pages,
-                },
+            chunks.append(
+                DocumentChunk(
+                    chunk_index=idx,
+                    total_chunks=chunk_count,
+                    file_path=chunk_path,
+                    extension=".pdf",
+                    metadata={
+                        "start_page": start_page + 1,
+                        "end_page": end_page,
+                        "total_pages": total_pages,
+                    },
+                )
             )
-        )
 
-    logger.info(
-        "pdf_split_completed",
-        total_pages=total_pages,
-        chunks_created=len(chunks),
-        chunk_size=chunk_size,
-    )
-    return chunks
+        logger.info(
+            "pdf_split_completed",
+            total_pages=total_pages,
+            chunks_created=len(chunks),
+            chunk_size=chunk_size,
+        )
+        return chunks
+
+    except Exception as exc:
+        logger.warning("pdf_split_failed_fallback_to_single", error=str(exc))
+        return [
+            DocumentChunk(
+                chunk_index=0,
+                total_chunks=1,
+                file_path=file_path,
+                extension=".pdf",
+                metadata={"fallback_reason": f"Splitting failed: {exc}"},
+            )
+        ]
 
 
 def split_csv(

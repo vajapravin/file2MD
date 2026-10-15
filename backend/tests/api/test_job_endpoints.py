@@ -49,3 +49,38 @@ async def test_get_nonexistent_job_returns_404() -> None:
         response = await client.get("/api/v1/jobs/nonexistent_job_id_999")
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_parallel_job_fallback_recovers_to_completion(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify that if splitting or chunking fails, the job falls back to single-pass and completes."""
+    from file2md.services import job_manager as jm_mod
+
+    # Simulate an error during splitting (e.g. RecursionError)
+    def mock_split_fail(*args: object, **kwargs: object) -> None:
+        raise RecursionError("maximum recursion depth exceeded")
+
+    monkeypatch.setattr(jm_mod, "split_document", mock_split_fail)
+
+    content = b"# Document Needing Fallback\n\nContent converted via fallback."
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/convert?mode=async",
+            files={"file": ("fallback_doc.md", io.BytesIO(content), "text/markdown")},
+        )
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+
+        completed = False
+        for _ in range(25):
+            await asyncio.sleep(0.2)
+            poll_res = await client.get(f"/api/v1/jobs/{job_id}")
+            if poll_res.json()["status"] == "completed":
+                completed = True
+                assert "# Document Needing Fallback" in poll_res.json()["markdown"]
+                assert poll_res.json()["progress"] == 100
+                break
+
+        assert completed, "Parallel job fallback did not successfully complete the job"

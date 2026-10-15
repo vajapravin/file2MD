@@ -12,6 +12,9 @@ class PdfConverter(BaseConverter):
         self._engine = MarkItDown()
 
     def convert(self, file_path: Path) -> str:
+        import sys
+        sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
+
         result = self._engine.convert(str(file_path))
         content = result.text_content.strip()
         if not content:

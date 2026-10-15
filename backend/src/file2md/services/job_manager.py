@@ -19,19 +19,28 @@ logger = structlog.get_logger()
 _executor: Optional[ProcessPoolExecutor] = None
 
 
+def _worker_init() -> None:
+    """Initialize worker process with increased recursion limit for complex parsing."""
+    import sys
+    sys.setrecursionlimit(10000)
+
+
 def get_process_executor() -> ProcessPoolExecutor:
     """Return a shared ProcessPoolExecutor instance."""
     global _executor
     if _executor is None:
         settings = get_settings()
         workers = min(settings.CHUNK_PARALLEL_WORKERS, max(1, (os.cpu_count() or 2)))
-        _executor = ProcessPoolExecutor(max_workers=workers)
+        _executor = ProcessPoolExecutor(max_workers=workers, initializer=_worker_init)
         logger.info("process_pool_executor_initialized", max_workers=workers)
     return _executor
 
 
 def _convert_chunk_task(chunk_path_str: str, ext: str, filename: str) -> str:
     """Standalone worker function executed inside an isolated OS process (bypasses GIL)."""
+    import sys
+    sys.setrecursionlimit(10000)
+
     from file2md.converters.csv_converter import CsvConverter
     from file2md.converters.docx import DocxConverter
     from file2md.converters.html import HtmlConverter
@@ -240,7 +249,38 @@ class JobManager:
             logger.info("parallel_job_completed", job_id=job_id, chunks=total_chunks, time_ms=elapsed_ms)
 
         except Exception as exc:
-            logger.error("parallel_job_failed", job_id=job_id, error=str(exc))
+            logger.error("parallel_job_failed", job_id=job_id, error=str(exc), exc_info=True)
+
+            # Graceful recovery: attempt direct single-pass conversion if chunking failed
+            try:
+                logger.info("parallel_job_attempting_fallback", job_id=job_id)
+                await self.update_job(
+                    job_id,
+                    {
+                        "status": JobStatus.PROCESSING.value,
+                        "progress": 50,
+                        "message": "Parallel chunk processing encountered an issue; falling back to direct conversion...",
+                    },
+                )
+                from file2md.services.converter import orchestrator
+
+                single_markdown = await orchestrator.convert(file_path, ext, filename)
+                elapsed_ms = int((time.perf_counter() - start_time_perf) * 1000)
+                await self.update_job(
+                    job_id,
+                    {
+                        "status": JobStatus.COMPLETED.value,
+                        "progress": 100,
+                        "message": "Conversion completed successfully",
+                        "markdown": single_markdown,
+                        "conversion_time_ms": elapsed_ms,
+                    },
+                )
+                logger.info("parallel_job_fallback_succeeded", job_id=job_id, time_ms=elapsed_ms)
+                return
+            except Exception as fallback_exc:
+                logger.error("parallel_job_fallback_failed", job_id=job_id, error=str(fallback_exc), exc_info=True)
+
             await self.update_job(
                 job_id,
                 {

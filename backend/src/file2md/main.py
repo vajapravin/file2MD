@@ -4,6 +4,9 @@ import logging
 import sys
 import structlog
 from fastapi import FastAPI
+
+# Raise recursion limit to prevent recursion errors on deeply nested PDF/HTML trees
+sys.setrecursionlimit(10000)
 from file2md.api.v1.router import api_v1_router
 from file2md.config import Settings, get_settings
 from file2md.middleware.cors import setup_cors

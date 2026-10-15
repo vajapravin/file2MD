@@ -101,3 +101,17 @@ def test_merge_markdown_chunks_normalizes_spacing() -> None:
     assert "## Next section" in merged
     assert "\n\n" in merged
     assert "\n\n\n" not in merged
+
+
+def test_split_pdf_falls_back_on_unreadable_file() -> None:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        corrupted_pdf = tmp_path / "corrupted.pdf"
+        corrupted_pdf.write_bytes(b"%PDF-1.4\nCorrupted content without valid xref table")
+        output_dir = tmp_path / "chunks"
+        output_dir.mkdir()
+
+        chunks = split_pdf(corrupted_pdf, output_dir)
+        assert len(chunks) == 1
+        assert chunks[0].chunk_index == 0
+        assert chunks[0].file_path == corrupted_pdf
