@@ -96,3 +96,63 @@ async def test_convert_rejects_unsupported_format() -> None:
 
     assert response.status_code == 400
     assert "Unsupported file format" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_convert_async_cleans_temp_dir_on_create_job_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from pathlib import Path
+    from file2md.services.job_manager import job_manager
+
+    base_dir = Path("/tmp/file2md")
+    initial_dirs = set(base_dir.iterdir()) if base_dir.exists() else set()
+
+    async def mock_create_job(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("Redis connection error simulated")
+
+    monkeypatch.setattr(job_manager, "create_job", mock_create_job)
+
+    content = b"# Test Markdown"
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(
+        transport=transport, base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/convert?mode=async",
+            files={"file": ("test.md", io.BytesIO(content), "text/markdown")},
+        )
+
+    assert response.status_code >= 500
+    current_dirs = set(base_dir.iterdir()) if base_dir.exists() else set()
+    assert current_dirs == initial_dirs
+
+
+@pytest.mark.asyncio
+async def test_convert_cleans_temp_dir_on_should_split_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from pathlib import Path
+    import file2md.api.v1.endpoints.convert as convert_module
+
+    base_dir = Path("/tmp/file2md")
+    initial_dirs = set(base_dir.iterdir()) if base_dir.exists() else set()
+
+    def mock_should_split(*args: object, **kwargs: object) -> bool:
+        raise ValueError("Corrupt file metadata")
+
+    monkeypatch.setattr(convert_module, "should_split_document", mock_should_split)
+
+    content = b"# Test Markdown"
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(
+        transport=transport, base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/convert?mode=auto",
+            files={"file": ("test.md", io.BytesIO(content), "text/markdown")},
+        )
+
+    assert response.status_code >= 500
+    current_dirs = set(base_dir.iterdir()) if base_dir.exists() else set()
+    assert current_dirs == initial_dirs

@@ -29,6 +29,8 @@ from file2md.services.validators import (
 logger = structlog.get_logger()
 router = APIRouter(tags=["Conversion"])
 
+_background_tasks: set[asyncio.Task[None]] = set()
+
 
 async def _run_parallel_job_with_cleanup(
     job_id: str,
@@ -94,26 +96,40 @@ async def convert_file(
     temp_file = temp_dir / safe_name
     temp_file.write_bytes(content)
 
-    # Check whether to trigger parallel splitting
-    is_parallel = (mode == "async") or (
-        mode != "sync" and should_split_document(temp_file, ext, size_bytes)
-    )
+    try:
+        # Check whether to trigger parallel splitting
+        is_parallel = (mode == "async") or (
+            mode != "sync" and should_split_document(temp_file, ext, size_bytes)
+        )
 
-    if is_parallel:
-        job_id = uuid.uuid4().hex
-        job_data = await job_manager.create_job(job_id, safe_name, ext, size_bytes)
+        if is_parallel:
+            job_id = uuid.uuid4().hex
+            job_data = await job_manager.create_job(job_id, safe_name, ext, size_bytes)
 
-        # Dispatch background parallel conversion pipeline
-        asyncio.create_task(
-            _run_parallel_job_with_cleanup(
-                job_id, temp_file, ext, safe_name, temp_dir, start_time
+            # Dispatch background parallel conversion pipeline
+            task = asyncio.create_task(
+                _run_parallel_job_with_cleanup(
+                    job_id, temp_file, ext, safe_name, temp_dir, start_time
+                )
             )
-        )
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
 
-        return JSONResponse(
-            status_code=status.HTTP_202_ACCEPTED,
-            content=job_data,
-        )
+            return JSONResponse(
+                status_code=status.HTTP_202_ACCEPTED,
+                content=job_data,
+            )
+    except Exception:
+        try:
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
+        except Exception as exc:
+            logger.warning(
+                "temp_cleanup_failed",
+                temp_dir=str(temp_dir),
+                error=str(exc),
+            )
+        raise
 
     # Fast-path synchronous conversion
     try:
