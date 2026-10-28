@@ -1,9 +1,4 @@
-import {
-  ConvertResponse,
-  BatchConvertResponse,
-  FormatInfo,
-  AsyncJobResponse,
-} from "../types";
+import { ConvertResponse, AsyncJobResponse } from "../types";
 
 // Default to relative "/api/v1" so it works across both local development and production domains
 const API_BASE = import.meta.env.VITE_API_BASE_URL
@@ -19,15 +14,6 @@ export async function fetchHealth(): Promise<{
     throw new Error(`Health check failed: ${res.statusText}`);
   }
   return res.json();
-}
-
-export async function fetchSupportedFormats(): Promise<FormatInfo[]> {
-  const res = await fetch(`${API_BASE}/formats`);
-  if (!res.ok) {
-    throw new Error(`Failed to load supported formats: ${res.statusText}`);
-  }
-  const data = await res.json();
-  return data.formats;
 }
 
 export async function fetchJobStatus(jobId: string): Promise<AsyncJobResponse> {
@@ -53,7 +39,7 @@ export async function convertSingleFile(
     body: formData,
   });
 
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
 
   if (res.status === 202) {
     // Large file queued for parallel chunking: poll until finished
@@ -95,27 +81,12 @@ export async function convertSingleFile(
   }
 
   if (!res.ok) {
-    throw new Error(data.detail || data.error || "File conversion failed.");
+    throw new Error(
+      data.detail ||
+        data.error ||
+        `File conversion failed (${res.statusText || res.status}).`,
+    );
   }
 
   return data as ConvertResponse;
-}
-
-export async function convertBatchFiles(
-  files: File[],
-): Promise<BatchConvertResponse> {
-  const formData = new FormData();
-  files.forEach((file) => formData.append("files", file, file.name));
-
-  const res = await fetch(`${API_BASE}/convert/batch`, {
-    method: "POST",
-    body: formData,
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.detail || data.error || "Batch conversion failed.");
-  }
-
-  return data as BatchConvertResponse;
 }

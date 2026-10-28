@@ -7,9 +7,10 @@ from pypdf import PdfWriter
 
 from file2md.services.merger import merge_csv_tables, merge_markdown_chunks
 from file2md.services.splitter import (
+    should_split_document,
     split_csv,
+    split_document,
     split_pdf,
-    split_text,
 )
 
 
@@ -64,18 +65,21 @@ def test_split_csv_retains_header_in_each_chunk() -> None:
             assert chunk_content.startswith("id,name,role\n")
 
 
-def test_split_text_generates_line_chunks() -> None:
+def test_text_and_md_documents_are_not_split() -> None:
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
         txt_file = tmp_path / "doc.txt"
         output_dir = tmp_path / "chunks"
         output_dir.mkdir()
 
-        lines = [f"Line {i}\n" for i in range(1, 101)]
-        txt_file.write_text("".join(lines))
+        txt_file.write_text("Hello world")
 
-        chunks = split_text(txt_file, output_dir, lines_per_chunk=30)
-        assert len(chunks) == 4  # 30 + 30 + 30 + 10
+        assert not should_split_document(txt_file, ".txt", 10_000_000)
+        assert not should_split_document(txt_file, ".md", 10_000_000)
+
+        chunks = split_document(txt_file, ".txt", output_dir)
+        assert len(chunks) == 1
+        assert chunks[0].file_path == txt_file
 
 
 def test_merge_csv_tables_combines_without_repeated_headers() -> None:

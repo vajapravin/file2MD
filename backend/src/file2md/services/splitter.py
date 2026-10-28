@@ -27,8 +27,8 @@ def should_split_document(file_path: Path, ext: str, size_bytes: int) -> bool:
     """Determine whether a document warrants parallel splitting."""
     settings = get_settings()
 
-    # Only PDF, CSV, and plain text / MD formats are split
-    if ext.lower() not in {".pdf", ".csv", ".txt", ".md"}:
+    # Only PDF and CSV formats are split
+    if ext.lower() not in {".pdf", ".csv"}:
         return False
 
     # Check size threshold
@@ -38,9 +38,6 @@ def should_split_document(file_path: Path, ext: str, size_bytes: int) -> bool:
     # For PDFs, check page count even if size is below threshold (e.g. text-dense)
     if ext.lower() == ".pdf":
         try:
-            import sys
-
-            sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
             from pypdf import PdfReader
 
             reader = PdfReader(str(file_path), strict=False)
@@ -69,9 +66,6 @@ def split_pdf(
     file_path: Path, output_dir: Path, pages_per_chunk: int | None = None
 ) -> list[DocumentChunk]:
     """Split a multi-page PDF into smaller PDF chunks for parallel conversion."""
-    import sys
-
-    sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
     from pypdf import PdfReader, PdfWriter
 
     settings = get_settings()
@@ -228,56 +222,6 @@ def split_csv(
     return chunks
 
 
-def split_text(
-    file_path: Path, output_dir: Path, lines_per_chunk: int | None = None
-) -> list[DocumentChunk]:
-    """Split plain text or markdown by line boundaries."""
-    settings = get_settings()
-    chunk_size = lines_per_chunk or settings.TXT_CHUNK_LINE_SIZE
-    ext = file_path.suffix.lower()
-
-    with open(file_path, encoding="utf-8", errors="replace") as f:
-        lines = f.readlines()
-
-    if len(lines) <= chunk_size:
-        return [
-            DocumentChunk(
-                chunk_index=0,
-                total_chunks=1,
-                file_path=file_path,
-                extension=ext,
-                metadata={"lines": len(lines)},
-            )
-        ]
-
-    chunks: list[DocumentChunk] = []
-    chunk_count = (len(lines) + chunk_size - 1) // chunk_size
-
-    for idx, start_idx in enumerate(range(0, len(lines), chunk_size)):
-        chunk_lines = lines[start_idx : start_idx + chunk_size]
-        chunk_path = output_dir / f"chunk_{idx:04d}{ext}"
-
-        with open(chunk_path, "w", encoding="utf-8") as f_out:
-            f_out.writelines(chunk_lines)
-
-        chunks.append(
-            DocumentChunk(
-                chunk_index=idx,
-                total_chunks=chunk_count,
-                file_path=chunk_path,
-                extension=ext,
-                metadata={"lines": len(chunk_lines)},
-            )
-        )
-
-    logger.info(
-        "text_split_completed",
-        total_lines=len(lines),
-        chunks_created=len(chunks),
-    )
-    return chunks
-
-
 def split_document(file_path: Path, ext: str, output_dir: Path) -> list[DocumentChunk]:
     """Dispatch file to the appropriate splitter."""
     ext_clean = ext.lower()
@@ -285,8 +229,6 @@ def split_document(file_path: Path, ext: str, output_dir: Path) -> list[Document
         return split_pdf(file_path, output_dir)
     elif ext_clean == ".csv":
         return split_csv(file_path, output_dir)
-    elif ext_clean in {".txt", ".md"}:
-        return split_text(file_path, output_dir)
     else:
         return [
             DocumentChunk(

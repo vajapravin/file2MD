@@ -19,7 +19,10 @@ from file2md.api.v1.schemas import (
     ConvertResponse,
 )
 from file2md.services.converter import orchestrator
-from file2md.services.file_cleanup import isolated_temp_directory
+from file2md.services.file_cleanup import (
+    create_isolated_temp_dir,
+    isolated_temp_directory,
+)
 from file2md.services.job_manager import job_manager
 from file2md.services.splitter import should_split_document
 from file2md.services.validators import (
@@ -98,16 +101,11 @@ async def convert_file(
     size_bytes = len(content)
 
     # Validation
-    ext = validate_file_metadata(safe_name, file.content_type, size_bytes)
+    ext = validate_file_metadata(safe_name, size_bytes)
     validate_file_signature(ext, content[:16])
 
     # Create isolated temp folder
-    base_dir = Path("/tmp/file2md")  # noqa: S108 - dedicated temporary directory
-    base_dir.mkdir(parents=True, exist_ok=True)
-    session_id = uuid.uuid4().hex
-    temp_dir = base_dir / session_id
-    temp_dir.mkdir(parents=True, exist_ok=True)
-
+    temp_dir = create_isolated_temp_dir()
     temp_file = temp_dir / safe_name
     temp_file.write_bytes(content)
 
@@ -219,7 +217,7 @@ async def convert_batch(files: list[UploadFile] = File(...)) -> BatchConvertResp
             content = await file.read()
             size_bytes = len(content)
 
-            ext = validate_file_metadata(safe_name, file.content_type, size_bytes)
+            ext = validate_file_metadata(safe_name, size_bytes)
             validate_file_signature(ext, content[:16])
 
             async with isolated_temp_directory() as temp_dir:

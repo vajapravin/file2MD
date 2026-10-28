@@ -58,11 +58,7 @@ def merge_markdown_chunks(chunk_markdowns: list[str], extension: str) -> str:
 
     if ext == ".csv":
         merged = merge_csv_tables(chunk_markdowns)
-    elif ext == ".pdf":
-        # Separate page chunks with clean spacing
-        merged = "\n\n".join(md.strip() for md in chunk_markdowns if md.strip())
     else:
-        # Standard text/markdown chunk merge
         merged = "\n\n".join(md.strip() for md in chunk_markdowns if md.strip())
 
     # Normalize excessive newlines

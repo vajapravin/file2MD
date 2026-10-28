@@ -328,7 +328,11 @@ class JobManager:
                 job_id,
                 {
                     "status": JobStatus.FAILED.value,
-                    "error": str(exc) or "Parallel document processing failed.",
+                    "error": (
+                        f"Failed to convert '{filename}'. The file may "
+                        f"be corrupt, password-protected, or in an unsupported "
+                        f"sub-format."
+                    ),
                     "message": "Conversion failed",
                 },
             )

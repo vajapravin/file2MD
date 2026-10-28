@@ -18,15 +18,9 @@ class Settings(BaseSettings):
     )
 
     # --- Application ---
-    APP_NAME: str = "file2md"
     APP_VERSION: str = "0.1.0"
     APP_ENV: str = "development"
-    APP_DEBUG: bool = True
     APP_LOG_LEVEL: str = "INFO"
-
-    # --- Server ---
-    HOST: str = "0.0.0.0"  # noqa: S104 - default server listen host
-    PORT: int = 8086
 
     # --- Upload & Processing Limits ---
     MAX_UPLOAD_SIZE_MB: int = 60
@@ -41,7 +35,6 @@ class Settings(BaseSettings):
     CHUNK_PARALLEL_WORKERS: int = 4
     PDF_CHUNK_PAGE_SIZE: int = 15  # pages per chunk
     CSV_CHUNK_ROW_SIZE: int = 1000  # rows per chunk
-    TXT_CHUNK_LINE_SIZE: int = 2000  # lines per chunk
 
     # --- CORS ---
     CORS_ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = [

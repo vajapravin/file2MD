@@ -11,15 +11,21 @@ import structlog
 logger = structlog.get_logger()
 
 
-@asynccontextmanager
-async def isolated_temp_directory() -> AsyncGenerator[Path, None]:
-    """Provide an isolated, unique temp directory deleted strictly upon exit."""
+def create_isolated_temp_dir() -> Path:
+    """Create an isolated, unique temp directory under /tmp/file2md."""
     base_dir = Path("/tmp/file2md")  # noqa: S108 - dedicated temporary directory
     base_dir.mkdir(parents=True, exist_ok=True)
 
     session_id = uuid.uuid4().hex
     temp_dir = base_dir / session_id
     temp_dir.mkdir(parents=True, exist_ok=True)
+    return temp_dir
+
+
+@asynccontextmanager
+async def isolated_temp_directory() -> AsyncGenerator[Path, None]:
+    """Provide an isolated, unique temp directory deleted strictly upon exit."""
+    temp_dir = create_isolated_temp_dir()
 
     try:
         yield temp_dir
