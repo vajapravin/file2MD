@@ -1,9 +1,12 @@
 """Document splitting services for parallel processing of large files."""
 
+import csv
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
+
 import structlog
+
 from file2md.config import get_settings
 
 logger = structlog.get_logger()
@@ -17,26 +20,24 @@ class DocumentChunk:
     total_chunks: int
     file_path: Path
     extension: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 def should_split_document(file_path: Path, ext: str, size_bytes: int) -> bool:
     """Determine whether a document warrants parallel splitting."""
     settings = get_settings()
 
-    # Only PDF, CSV, and plain text / MD formats are split
-    if ext.lower() not in {".pdf", ".csv", ".txt", ".md"}:
+    # Only PDF and CSV formats are split
+    if ext.lower() not in {".pdf", ".csv"}:
         return False
 
     # Check size threshold
     if size_bytes >= settings.CHUNK_SPLIT_THRESHOLD_BYTES:
         return True
 
-    # For PDFs, also check page count even if file size is below threshold (e.g., text-dense PDFs)
+    # For PDFs, check page count even if size is below threshold (e.g. text-dense)
     if ext.lower() == ".pdf":
         try:
-            import sys
-            sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
             from pypdf import PdfReader
 
             reader = PdfReader(str(file_path), strict=False)
@@ -49,8 +50,9 @@ def should_split_document(file_path: Path, ext: str, size_bytes: int) -> bool:
     # For CSVs, also check row count even if file is compact
     if ext.lower() == ".csv":
         try:
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                for count, _ in enumerate(f):
+            with open(file_path, newline="", encoding="utf-8", errors="ignore") as f:
+                csv_reader = csv.reader(f)
+                for count, _ in enumerate(csv_reader):
                     if count >= settings.CSV_CHUNK_ROW_SIZE * 3:
                         return True
         except Exception as exc:
@@ -62,10 +64,8 @@ def should_split_document(file_path: Path, ext: str, size_bytes: int) -> bool:
 
 def split_pdf(
     file_path: Path, output_dir: Path, pages_per_chunk: int | None = None
-) -> List[DocumentChunk]:
+) -> list[DocumentChunk]:
     """Split a multi-page PDF into smaller PDF chunks for parallel conversion."""
-    import sys
-    sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
     from pypdf import PdfReader, PdfWriter
 
     settings = get_settings()
@@ -93,11 +93,15 @@ def split_pdf(
                 total_chunks=1,
                 file_path=file_path,
                 extension=".pdf",
-                metadata={"start_page": 1, "end_page": total_pages, "total_pages": total_pages},
+                metadata={
+                    "start_page": 1,
+                    "end_page": total_pages,
+                    "total_pages": total_pages,
+                },
             )
         ]
 
-    chunks: List[DocumentChunk] = []
+    chunks: list[DocumentChunk] = []
     chunk_count = (total_pages + chunk_size - 1) // chunk_size
 
     try:
@@ -105,9 +109,11 @@ def split_pdf(
             end_page = min(start_page + chunk_size, total_pages)
             writer = PdfWriter()
 
-            # Using append with import_outline=False prevents deeply nested outline recursion
+            # Using append with import_outline=False prevents outline recursion
             try:
-                writer.append(reader, pages=(start_page, end_page), import_outline=False)
+                writer.append(
+                    reader, pages=(start_page, end_page), import_outline=False
+                )
             except Exception:
                 for page_num in range(start_page, end_page):
                     writer.add_page(reader.pages[page_num])
@@ -153,29 +159,28 @@ def split_pdf(
 
 def split_csv(
     file_path: Path, output_dir: Path, rows_per_chunk: int | None = None
-) -> List[DocumentChunk]:
+) -> list[DocumentChunk]:
     """Split a CSV into row chunks, retaining the header row in each chunk."""
     settings = get_settings()
     chunk_size = rows_per_chunk or settings.CSV_CHUNK_ROW_SIZE
 
-    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-        lines = f.readlines()
+    with open(file_path, newline="", encoding="utf-8", errors="replace") as f:
+        reader = csv.reader(f)
+        try:
+            header = next(reader)
+        except StopIteration:
+            return [
+                DocumentChunk(
+                    chunk_index=0,
+                    total_chunks=1,
+                    file_path=file_path,
+                    extension=".csv",
+                    metadata={"rows": 0},
+                )
+            ]
+        data_rows = list(reader)
 
-    if len(lines) <= 1:
-        return [
-            DocumentChunk(
-                chunk_index=0,
-                total_chunks=1,
-                file_path=file_path,
-                extension=".csv",
-                metadata={"rows": len(lines)},
-            )
-        ]
-
-    header = lines[0]
-    data_rows = lines[1:]
     total_data_rows = len(data_rows)
-
     if total_data_rows <= chunk_size:
         return [
             DocumentChunk(
@@ -183,20 +188,21 @@ def split_csv(
                 total_chunks=1,
                 file_path=file_path,
                 extension=".csv",
-                metadata={"rows": len(lines)},
+                metadata={"rows": total_data_rows + 1},
             )
         ]
 
-    chunks: List[DocumentChunk] = []
+    chunks: list[DocumentChunk] = []
     chunk_count = (total_data_rows + chunk_size - 1) // chunk_size
 
     for idx, start_idx in enumerate(range(0, total_data_rows, chunk_size)):
         chunk_rows = data_rows[start_idx : start_idx + chunk_size]
         chunk_path = output_dir / f"chunk_{idx:04d}.csv"
 
-        with open(chunk_path, "w", encoding="utf-8") as f_out:
-            f_out.write(header)
-            f_out.writelines(chunk_rows)
+        with open(chunk_path, "w", newline="", encoding="utf-8") as f_out:
+            writer = csv.writer(f_out)
+            writer.writerow(header)
+            writer.writerows(chunk_rows)
 
         chunks.append(
             DocumentChunk(
@@ -216,65 +222,13 @@ def split_csv(
     return chunks
 
 
-def split_text(
-    file_path: Path, output_dir: Path, lines_per_chunk: int | None = None
-) -> List[DocumentChunk]:
-    """Split plain text or markdown by line boundaries."""
-    settings = get_settings()
-    chunk_size = lines_per_chunk or settings.TXT_CHUNK_LINE_SIZE
-    ext = file_path.suffix.lower()
-
-    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-        lines = f.readlines()
-
-    if len(lines) <= chunk_size:
-        return [
-            DocumentChunk(
-                chunk_index=0,
-                total_chunks=1,
-                file_path=file_path,
-                extension=ext,
-                metadata={"lines": len(lines)},
-            )
-        ]
-
-    chunks: List[DocumentChunk] = []
-    chunk_count = (len(lines) + chunk_size - 1) // chunk_size
-
-    for idx, start_idx in enumerate(range(0, len(lines), chunk_size)):
-        chunk_lines = lines[start_idx : start_idx + chunk_size]
-        chunk_path = output_dir / f"chunk_{idx:04d}{ext}"
-
-        with open(chunk_path, "w", encoding="utf-8") as f_out:
-            f_out.writelines(chunk_lines)
-
-        chunks.append(
-            DocumentChunk(
-                chunk_index=idx,
-                total_chunks=chunk_count,
-                file_path=chunk_path,
-                extension=ext,
-                metadata={"lines": len(chunk_lines)},
-            )
-        )
-
-    logger.info(
-        "text_split_completed",
-        total_lines=len(lines),
-        chunks_created=len(chunks),
-    )
-    return chunks
-
-
-def split_document(file_path: Path, ext: str, output_dir: Path) -> List[DocumentChunk]:
+def split_document(file_path: Path, ext: str, output_dir: Path) -> list[DocumentChunk]:
     """Dispatch file to the appropriate splitter."""
     ext_clean = ext.lower()
     if ext_clean == ".pdf":
         return split_pdf(file_path, output_dir)
     elif ext_clean == ".csv":
         return split_csv(file_path, output_dir)
-    elif ext_clean in {".txt", ".md"}:
-        return split_text(file_path, output_dir)
     else:
         return [
             DocumentChunk(

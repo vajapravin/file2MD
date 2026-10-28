@@ -2,35 +2,32 @@
 
 import re
 from pathlib import Path
-from typing import Dict, List, Set
+
 from fastapi import HTTPException, status
+
 from file2md.config import get_settings
 
-# Whitelisted extensions and corresponding valid MIME types
-SUPPORTED_EXTENSIONS: Dict[str, Set[str]] = {
-    ".pdf": {"application/pdf"},
-    ".docx": {
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/zip",
-        "application/octet-stream",
-    },
-    ".txt": {"text/plain", "application/octet-stream"},
-    ".html": {"text/html", "text/plain", "application/xhtml+xml"},
-    ".htm": {"text/html", "text/plain", "application/xhtml+xml"},
-    ".csv": {"text/csv", "application/csv", "text/plain"},
-    ".json": {"application/json", "text/plain"},
-    ".md": {"text/markdown", "text/x-markdown", "text/plain"},
-    ".markdown": {"text/markdown", "text/x-markdown", "text/plain"},
+# Whitelisted extensions
+SUPPORTED_EXTENSIONS: set[str] = {
+    ".pdf",
+    ".docx",
+    ".txt",
+    ".html",
+    ".htm",
+    ".csv",
+    ".json",
+    ".md",
+    ".markdown",
 }
 
-MAGIC_SIGNATURES: Dict[str, bytes] = {
+MAGIC_SIGNATURES: dict[str, bytes] = {
     ".pdf": b"%PDF",
     ".docx": b"PK\x03\x04",
 }
 
 
 def sanitize_filename(raw_filename: str) -> str:
-    """Sanitize filename to prevent directory traversal and remove dangerous characters."""
+    """Sanitize filename to prevent traversal and remove dangerous chars."""
     if not raw_filename or not raw_filename.strip():
         return "unnamed_document"
 
@@ -52,10 +49,8 @@ def sanitize_filename(raw_filename: str) -> str:
     return name.strip() or "unnamed_document"
 
 
-def validate_file_metadata(
-    filename: str, content_type: str | None, size_bytes: int
-) -> str:
-    """Validate file extension, size limit, and MIME type."""
+def validate_file_metadata(filename: str, size_bytes: int) -> str:
+    """Validate file extension and size limit."""
     settings = get_settings()
 
     # 1. Size check
@@ -79,7 +74,7 @@ def validate_file_metadata(
     ext = Path(clean_filename).suffix.lower()
 
     if ext not in SUPPORTED_EXTENSIONS:
-        valid_exts = ", ".join(sorted(SUPPORTED_EXTENSIONS.keys()))
+        valid_exts = ", ".join(sorted(SUPPORTED_EXTENSIONS))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported file format '{ext}'. Supported formats: {valid_exts}",
@@ -95,5 +90,8 @@ def validate_file_signature(ext: str, header_bytes: bytes) -> None:
         if not header_bytes.startswith(expected):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File content does not match expected {ext.upper()} file signature.",
+                detail=(
+                    f"File content does not match expected {ext.upper()} "
+                    f"file signature."
+                ),
             )

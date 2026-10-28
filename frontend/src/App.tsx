@@ -1,16 +1,22 @@
 import { useEffect, useState } from "react";
-import { convertSingleFile, fetchHealth } from "./services/convertApi";
+import {
+  convertSingleFile,
+  convertUrl,
+  fetchHealth,
+} from "./services/convertApi";
 import { ErrorDisplay } from "./components/ErrorDisplay";
 import { FileList } from "./components/FileList";
 import { FileUpload } from "./components/FileUpload";
 import { FormatBadges } from "./components/FormatBadges";
 import { MarkdownPreview } from "./components/MarkdownPreview";
 import { Navbar } from "./components/Navbar";
+import { UrlConvertInput } from "./components/UrlConvertInput";
 import { UploadedFileItem } from "./types";
 import { getFileExtension } from "./utils/fileValidation";
 
 export function App() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [inputMode, setInputMode] = useState<"file" | "url">("file");
   const [isHealthy, setIsHealthy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [files, setFiles] = useState<UploadedFileItem[]>([]);
@@ -52,42 +58,69 @@ export function App() {
   };
 
   const convertFileItem = async (item: UploadedFileItem) => {
-    // Set status to uploading
     setFiles((prev) =>
-      prev.map((f) => (f.id === item.id ? { ...f, status: "uploading", progress: 0, error: undefined } : f))
+      prev.map((f) =>
+        f.id === item.id
+          ? {
+              ...f,
+              status: item.sourceUrl ? "processing" : "uploading",
+              progress: item.sourceUrl ? 50 : 0,
+              error: undefined,
+            }
+          : f,
+      ),
     );
 
     try {
-      const response = await convertSingleFile(item.file, (job) => {
+      if (item.sourceUrl) {
+        const response = await convertUrl(item.sourceUrl);
         setFiles((prev) =>
           prev.map((f) =>
             f.id === item.id
               ? {
                   ...f,
-                  status: "processing",
-                  progress: job.progress,
-                  totalChunks: job.chunks_total,
-                  processedChunks: job.chunks_completed,
-                  jobMessage: job.message,
+                  name: response.filename,
+                  size: response.metadata.size_bytes,
+                  status: "success",
+                  progress: 100,
+                  markdown: response.markdown,
+                  metadata: response.metadata,
                 }
-              : f
-          )
+              : f,
+          ),
         );
-      });
+      } else if (item.file) {
+        const response = await convertSingleFile(item.file, (job) => {
+          setFiles((prev) =>
+            prev.map((f) =>
+              f.id === item.id
+                ? {
+                    ...f,
+                    status: "processing",
+                    progress: job.progress,
+                    totalChunks: job.chunks_total,
+                    processedChunks: job.chunks_completed,
+                    jobMessage: job.message,
+                  }
+                : f,
+            ),
+          );
+        });
 
-      setFiles((prev) =>
-        prev.map((f) =>
-          f.id === item.id
-            ? {
-                ...f,
-                status: "success",
-                progress: 100,
-                markdown: response.markdown,
-                metadata: response.metadata,
-              }
-            : f
-        )
-      );
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === item.id
+              ? {
+                  ...f,
+                  status: "success",
+                  progress: 100,
+                  markdown: response.markdown,
+                  metadata: response.metadata,
+                }
+              : f,
+          ),
+        );
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Conversion failed.";
       setFiles((prev) =>
@@ -98,10 +131,31 @@ export function App() {
                 status: "error",
                 error: msg,
               }
-            : f
-        )
+            : f,
+        ),
       );
     }
+  };
+
+  const handleUrlSubmit = async (targetUrl: string) => {
+    setErrorMessage(null);
+    const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const urlItem: UploadedFileItem = {
+      id,
+      sourceUrl: targetUrl,
+      name: targetUrl,
+      size: 0,
+      format: "url",
+      status: "idle",
+      progress: 0,
+    };
+
+    setFiles((prev) => [urlItem, ...prev]);
+    setSelectedId(id);
+
+    setIsConverting(true);
+    await convertFileItem(urlItem);
+    setIsConverting(false);
   };
 
   // Add files and immediately trigger conversion for seamless experience
@@ -133,7 +187,9 @@ export function App() {
   };
 
   const handleConvertAll = async () => {
-    const idleFiles = files.filter((f) => f.status === "idle" || f.status === "error");
+    const idleFiles = files.filter(
+      (f) => f.status === "idle" || f.status === "error",
+    );
     if (idleFiles.length === 0) return;
 
     setIsConverting(true);
@@ -163,11 +219,7 @@ export function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
-      <Navbar
-        isHealthy={isHealthy}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-      />
+      <Navbar isHealthy={isHealthy} theme={theme} onToggleTheme={toggleTheme} />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
@@ -177,8 +229,8 @@ export function App() {
             Convert Any Document to Clean Markdown
           </h2>
           <p className="mt-3 text-sm sm:text-base text-slate-600 dark:text-slate-400">
-            Preserve headers, tables, links, and text structure without external cloud tracking.
-            Powered by Microsoft's MarkItDown engine.
+            Preserve headers, tables, links, and text structure without external
+            cloud tracking. Powered by Microsoft's MarkItDown engine.
           </p>
 
           <FormatBadges />
@@ -194,11 +246,71 @@ export function App() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Left Column: Upload & Queue */}
           <div className="lg:col-span-5 space-y-6">
-            <FileUpload
-              onFilesSelected={handleFilesSelected}
-              onError={(msg) => setErrorMessage(msg)}
-              isProcessing={isConverting}
-            />
+            {/* Input Mode Selector */}
+            <div className="flex items-center justify-center p-1 rounded-xl bg-slate-200/60 dark:bg-slate-800/60 border border-slate-300/60 dark:border-slate-700/60">
+              <button
+                type="button"
+                onClick={() => setInputMode("file")}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center space-x-1.5 ${
+                  inputMode === "file"
+                    ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                }`}
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.8}
+                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                  />
+                </svg>
+                <span>Upload Documents</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputMode("url")}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center space-x-1.5 ${
+                  inputMode === "url"
+                    ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                }`}
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.8}
+                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                  />
+                </svg>
+                <span>URL to Markdown</span>
+              </button>
+            </div>
+
+            {inputMode === "file" ? (
+              <FileUpload
+                onFilesSelected={handleFilesSelected}
+                onError={(msg) => setErrorMessage(msg)}
+                isProcessing={isConverting}
+              />
+            ) : (
+              <UrlConvertInput
+                onUrlSubmit={handleUrlSubmit}
+                onError={(msg) => setErrorMessage(msg)}
+                isProcessing={isConverting}
+              />
+            )}
 
             <FileList
               files={files}

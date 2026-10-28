@@ -2,13 +2,15 @@
 
 import re
 from pathlib import Path
+
 from file2md.converters.base import BaseConverter
 
 
 class MarkdownNormalizer(BaseConverter):
     """Normalizes and cleans up existing Markdown files.
 
-    Standardizes newlines, trims trailing whitespace on lines, and removes excessive blank lines.
+    Standardizes newlines, trims trailing whitespace, and removes excess blank
+    lines.
     """
 
     def convert(self, file_path: Path) -> str:

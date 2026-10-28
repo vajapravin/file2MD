@@ -1,6 +1,7 @@
 """Health check and format discovery endpoints."""
 
 from fastapi import APIRouter
+
 from file2md.api.v1.schemas import FormatInfo, FormatsResponse, HealthResponse
 from file2md.config import get_settings
 
@@ -11,7 +12,9 @@ router = APIRouter(tags=["System"])
     "/health",
     response_model=HealthResponse,
     summary="Check service health",
-    description="Returns the current operational status and version of the file2MD backend.",
+    description=(
+        "Returns the current operational status and version of the " "file2MD backend."
+    ),
 )
 async def check_health() -> HealthResponse:
     settings = get_settings()
@@ -25,7 +28,9 @@ async def check_health() -> HealthResponse:
     "/formats",
     response_model=FormatsResponse,
     summary="List supported formats",
-    description="Returns list of file extensions and MIME types accepted for conversion.",
+    description=(
+        "Returns list of file extensions and MIME types accepted for " "conversion."
+    ),
 )
 async def list_formats() -> FormatsResponse:
     # Formats defined per specification

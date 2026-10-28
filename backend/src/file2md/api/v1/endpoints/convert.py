@@ -5,21 +5,28 @@ import shutil
 import time
 import uuid
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
+
+import structlog
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse
-import structlog
+
 from file2md.api.v1.schemas import (
     AsyncJobResponse,
     BatchConvertItem,
     BatchConvertResponse,
     ConvertMetadata,
     ConvertResponse,
+    ConvertUrlRequest,
 )
 from file2md.services.converter import orchestrator
-from file2md.services.file_cleanup import isolated_temp_directory
+from file2md.services.file_cleanup import (
+    create_isolated_temp_dir,
+    isolated_temp_directory,
+)
 from file2md.services.job_manager import job_manager
 from file2md.services.splitter import should_split_document
+from file2md.services.url_fetcher import fetch_url_content
 from file2md.services.validators import (
     sanitize_filename,
     validate_file_metadata,
@@ -28,6 +35,8 @@ from file2md.services.validators import (
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["Conversion"])
+
+_background_tasks: set[asyncio.Task[None]] = set()
 
 
 async def _run_parallel_job_with_cleanup(
@@ -38,7 +47,7 @@ async def _run_parallel_job_with_cleanup(
     temp_dir: Path,
     start_time: float,
 ) -> None:
-    """Execute parallel job in background and ensure temp directory cleanup upon completion."""
+    """Execute parallel job in background and clean up temp directory."""
     try:
         await job_manager.execute_parallel_job(
             job_id, file_path, ext, safe_name, temp_dir, start_time
@@ -48,27 +57,40 @@ async def _run_parallel_job_with_cleanup(
             if temp_dir.exists():
                 shutil.rmtree(temp_dir)
         except Exception as exc:
-            logger.warning("async_temp_cleanup_failed", temp_dir=str(temp_dir), error=str(exc))
+            logger.warning(
+                "async_temp_cleanup_failed",
+                temp_dir=str(temp_dir),
+                error=str(exc),
+            )
 
 
 @router.post(
     "/convert",
     summary="Convert a single file to Markdown (Sync or Parallel Async)",
     description=(
-        "Converts a document to Markdown. Large files or multi-page documents are automatically "
-        "split and processed in parallel across worker processes, returning an HTTP 202 Accepted "
-        "job with real-time status polling."
+        "Converts a document to Markdown. Large files or multi-page documents "
+        "are automatically split and processed in parallel across worker "
+        "processes, returning an HTTP 202 Accepted job with status polling."
     ),
     responses={
-        200: {"model": ConvertResponse, "description": "Instant synchronous conversion result"},
-        202: {"model": AsyncJobResponse, "description": "Asynchronous parallel chunking job created"},
+        200: {
+            "model": ConvertResponse,
+            "description": "Instant synchronous conversion result",
+        },
+        202: {
+            "model": AsyncJobResponse,
+            "description": "Asynchronous parallel chunking job created",
+        },
     },
 )
 async def convert_file(
     file: UploadFile = File(...),
-    mode: Optional[str] = Query(
+    mode: str | None = Query(
         default="auto",
-        description="Conversion execution mode: 'auto' (split if large), 'sync' (force single-pass), 'async'",
+        description=(
+            "Conversion execution mode: 'auto' (split if large), "
+            "'sync' (force single-pass), 'async'"
+        ),
     ),
 ) -> Any:
     start_time = time.perf_counter()
@@ -81,39 +103,51 @@ async def convert_file(
     size_bytes = len(content)
 
     # Validation
-    ext = validate_file_metadata(safe_name, file.content_type, size_bytes)
+    ext = validate_file_metadata(safe_name, size_bytes)
     validate_file_signature(ext, content[:16])
 
     # Create isolated temp folder
-    base_dir = Path("/tmp/file2md")
-    base_dir.mkdir(parents=True, exist_ok=True)
-    session_id = uuid.uuid4().hex
-    temp_dir = base_dir / session_id
-    temp_dir.mkdir(parents=True, exist_ok=True)
-
+    temp_dir = create_isolated_temp_dir()
     temp_file = temp_dir / safe_name
     temp_file.write_bytes(content)
 
-    # Check whether to trigger parallel splitting
-    is_parallel = (mode == "async") or (
-        mode != "sync" and should_split_document(temp_file, ext, size_bytes)
-    )
-
-    if is_parallel:
-        job_id = uuid.uuid4().hex
-        job_data = await job_manager.create_job(job_id, safe_name, ext, size_bytes)
-
-        # Dispatch background parallel conversion pipeline
-        asyncio.create_task(
-            _run_parallel_job_with_cleanup(
-                job_id, temp_file, ext, safe_name, temp_dir, start_time
+    try:
+        # Check whether to trigger parallel splitting
+        is_parallel = (mode == "async") or (
+            mode != "sync"
+            and await asyncio.to_thread(
+                should_split_document, temp_file, ext, size_bytes
             )
         )
 
-        return JSONResponse(
-            status_code=status.HTTP_202_ACCEPTED,
-            content=job_data,
-        )
+        if is_parallel:
+            job_id = uuid.uuid4().hex
+            job_data = await job_manager.create_job(job_id, safe_name, ext, size_bytes)
+
+            # Dispatch background parallel conversion pipeline
+            task = asyncio.create_task(
+                _run_parallel_job_with_cleanup(
+                    job_id, temp_file, ext, safe_name, temp_dir, start_time
+                )
+            )
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
+
+            return JSONResponse(
+                status_code=status.HTTP_202_ACCEPTED,
+                content=job_data,
+            )
+    except Exception:
+        try:
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
+        except Exception as exc:
+            logger.warning(
+                "temp_cleanup_failed",
+                temp_dir=str(temp_dir),
+                error=str(exc),
+            )
+        raise
 
     # Fast-path synchronous conversion
     try:
@@ -123,7 +157,11 @@ async def convert_file(
             if temp_dir.exists():
                 shutil.rmtree(temp_dir)
         except Exception as exc:
-            logger.warning("sync_temp_cleanup_failed", temp_dir=str(temp_dir), error=str(exc))
+            logger.warning(
+                "sync_temp_cleanup_failed",
+                temp_dir=str(temp_dir),
+                error=str(exc),
+            )
 
     elapsed_ms = int((time.perf_counter() - start_time) * 1000)
 
@@ -142,7 +180,10 @@ async def convert_file(
     "/jobs/{job_id}",
     response_model=AsyncJobResponse,
     summary="Get status and progress of an asynchronous/split conversion job",
-    description="Polls real-time progress of parallel chunk conversion and retrieves final Markdown upon completion.",
+    description=(
+        "Polls real-time progress of parallel chunk conversion and retrieves "
+        "final Markdown upon completion."
+    ),
 )
 async def get_job_status(job_id: str) -> AsyncJobResponse:
     job = await job_manager.get_job(job_id)
@@ -160,14 +201,14 @@ async def get_job_status(job_id: str) -> AsyncJobResponse:
     summary="Batch convert multiple files to Markdown",
     description="Converts multiple files and returns individual conversion results.",
 )
-async def convert_batch(files: List[UploadFile] = File(...)) -> BatchConvertResponse:
+async def convert_batch(files: list[UploadFile] = File(...)) -> BatchConvertResponse:
     if not files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No files were provided for batch conversion.",
         )
 
-    results: List[BatchConvertItem] = []
+    results: list[BatchConvertItem] = []
 
     for file in files:
         start_time = time.perf_counter()
@@ -178,7 +219,7 @@ async def convert_batch(files: List[UploadFile] = File(...)) -> BatchConvertResp
             content = await file.read()
             size_bytes = len(content)
 
-            ext = validate_file_metadata(safe_name, file.content_type, size_bytes)
+            ext = validate_file_metadata(safe_name, size_bytes)
             validate_file_signature(ext, content[:16])
 
             async with isolated_temp_directory() as temp_dir:
@@ -212,8 +253,45 @@ async def convert_batch(files: List[UploadFile] = File(...)) -> BatchConvertResp
                 BatchConvertItem(
                     filename=safe_name,
                     status="error",
-                    error="Conversion failed due to an unexpected document parsing error.",
+                    error=(
+                        "Conversion failed due to an unexpected document "
+                        "parsing error."
+                    ),
                 )
             )
 
     return BatchConvertResponse(results=results)
+
+
+@router.post(
+    "/convert/url",
+    response_model=ConvertResponse,
+    summary="Convert a web page URL to clean Markdown",
+    description=(
+        "Safely fetches HTML content from a verified HTTP/HTTPS URL with strict "
+        "SSRF protection and converts it to clean, structured Markdown."
+    ),
+)
+async def convert_url(request: ConvertUrlRequest) -> ConvertResponse:
+    start_time = time.perf_counter()
+
+    html_content, suggested_name = await fetch_url_content(request.url)
+    content_bytes = html_content.encode("utf-8")
+    size_bytes = len(content_bytes)
+
+    async with isolated_temp_directory() as temp_dir:
+        temp_file = temp_dir / suggested_name
+        temp_file.write_bytes(content_bytes)
+        markdown = await orchestrator.convert(temp_file, ".html", suggested_name)
+
+    elapsed_ms = int((time.perf_counter() - start_time) * 1000)
+
+    return ConvertResponse(
+        filename=suggested_name,
+        original_format="url",
+        markdown=markdown,
+        metadata=ConvertMetadata(
+            size_bytes=size_bytes,
+            conversion_time_ms=elapsed_ms,
+        ),
+    )

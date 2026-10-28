@@ -19,7 +19,8 @@ export interface ConvertResponse {
 
 export interface AsyncJobResponse {
   job_id: string;
-  status: "pending" | "splitting" | "processing" | "merging" | "completed" | "failed";
+  status:
+    "pending" | "splitting" | "processing" | "merging" | "completed" | "failed";
   filename: string;
   extension: string;
   size_bytes: number;
@@ -46,7 +47,8 @@ export interface BatchConvertResponse {
 
 export interface UploadedFileItem {
   id: string;
-  file: File;
+  file?: File;
+  sourceUrl?: string;
   name: string;
   size: number;
   format: string;
@@ -59,4 +61,3 @@ export interface UploadedFileItem {
   error?: string;
   metadata?: ConvertMetadata;
 }
-

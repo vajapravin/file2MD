@@ -45,7 +45,7 @@ file2MD separates concerns across distinct layers to ensure security, maintainab
    TypeScript, and Tailwind CSS. Features drag-and-drop uploads, instant client-side
    validation, live markdown preview with syntax highlighting, and batch export.
 2. **FastAPI backend** — a versioned REST API (`/api/v1/`). Handles file upload
-   reception, MIME-sniffing, validation checks, and dispatches files to dedicated
+   reception, file signature validation checks, and dispatches files to dedicated
    conversion workers.
 3. **Modular Conversion Strategy (MarkItDown)** — wraps Microsoft's `markitdown`
    library using the Strategy pattern (`BaseConverter`). Each document format has
@@ -61,6 +61,8 @@ file2MD separates concerns across distinct layers to ensure security, maintainab
 
 - **Multi-format support** — converts PDF, Word (`.docx`), Plain Text (`.txt`),
   HTML (`.html`), CSV (`.csv`), JSON (`.json`), and normalizes existing Markdown (`.md`).
+- **URL to Markdown** — directly convert live web pages into clean, structured Markdown
+  with built-in SSRF and private-network protection.
 - **Structure preservation** — maintains headings, paragraphs, bullet/numbered
   lists, nested tables, code fences, and hyperlinks.
 - **Interactive Markdown preview** — side-by-side or tabbed view showing rendered
@@ -78,11 +80,12 @@ file2MD separates concerns across distinct layers to ensure security, maintainab
 
 ## 🔒 How file2MD protects your data
 
-- **Zero persistence.** file2MD contains no database, no caching layer, and no analytics
-  trackers. Once the converted Markdown is returned, the source file is gone.
-- **Triple-layer file validation.** Every upload is inspected across three layers:
-  extension whitelist, declared MIME type, and magic byte signature inspection to prevent
-  file spoofing.
+- **Zero permanent persistence.** file2MD stores no persistent document records or analytics
+  trackers. Source files are strictly isolated in temporary directories and deleted immediately
+  upon conversion. For asynchronous jobs, results are held in Redis with an ephemeral TTL
+  (`JOB_TTL_SECONDS`, default 1 hour) before automatic expiration.
+- **Robust file validation.** Every upload is inspected across an extension whitelist and
+  magic byte signature inspection to prevent file spoofing and malicious payloads.
 - **Isolated execution & safe filenames.** Uploads are written to dedicated temporary
   directories using generated UUIDs, mitigating path traversal and filesystem clashes.
 - **No script or macro execution.** Documents are parsed strictly for text and structural
@@ -193,8 +196,9 @@ npm run typecheck
 ## 🗺 Roadmap
 
 - [x] Initial multi-format engine (PDF, DOCX, TXT, HTML, CSV, JSON, MD)
+- [x] URL to Markdown conversion with SSRF and private-network protection
 - [x] Live side-by-side Markdown preview and clipboard copy
-- [x] Strict security sandbox, mime-validation, and timeout limits
+- [x] Strict security sandbox, signature validation, and timeout limits
 - [ ] OCR extraction for images using vision models / Tesseract
 - [ ] Multi-file archive support (converting all contents of `.zip`)
 - [ ] CLI utility (`file2md-cli`) for terminal workflows

@@ -33,6 +33,7 @@ yarn-error.log*
 # Vite / Build output
 # ==========================
 frontend/dist/
+*.tsbuildinfo
 
 # ==========================
 # Environment & secrets

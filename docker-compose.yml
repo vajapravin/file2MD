@@ -8,9 +8,6 @@ services:
       - "${BACKEND_PORT:-8086}:8086"
     environment:
       - APP_ENV=development
-      - APP_DEBUG=true
-      - HOST=0.0.0.0
-      - PORT=8086
       - MAX_UPLOAD_SIZE_MB=60
       - REDIS_URL=redis://redis:6379/0
       - CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:8086,https://file2md.vajapravin.me,http://file2md.vajapravin.me
