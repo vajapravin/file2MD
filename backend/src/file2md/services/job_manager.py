@@ -48,27 +48,9 @@ def _convert_chunk_task(chunk_path_str: str, ext: str, filename: str) -> str:
 
     sys.setrecursionlimit(10000)
 
-    from file2md.converters.csv_converter import CsvConverter
-    from file2md.converters.docx import DocxConverter
-    from file2md.converters.html import HtmlConverter
-    from file2md.converters.json_converter import JsonConverter
-    from file2md.converters.markdown import MarkdownNormalizer
-    from file2md.converters.pdf import PdfConverter
-    from file2md.converters.txt import TxtConverter
+    from file2md.converters import CONVERTERS
 
-    converters = {
-        ".pdf": PdfConverter(),
-        ".docx": DocxConverter(),
-        ".txt": TxtConverter(),
-        ".html": HtmlConverter(),
-        ".htm": HtmlConverter(),
-        ".csv": CsvConverter(),
-        ".json": JsonConverter(),
-        ".md": MarkdownNormalizer(),
-        ".markdown": MarkdownNormalizer(),
-    }
-
-    converter = converters.get(ext.lower())
+    converter = CONVERTERS.get(ext.lower())
     if not converter:
         raise ValueError(f"No converter found for format '{ext}'")
 
@@ -210,26 +192,31 @@ class JobManager:
                 )
                 tasks.append(task)
 
-            # Gather with progress reporting as each finishes
-            for completed_count, coro in enumerate(
-                asyncio.as_completed(tasks), start=1
-            ):
-                await coro
-                progress = int(15 + (completed_count / total_chunks) * 75)
-                await self.update_job(
-                    job_id,
-                    {
-                        "progress": progress,
-                        "chunks_completed": completed_count,
-                        "message": (
-                            f"Converted chunk {completed_count} of {total_chunks} "
-                            f"({progress}%)..."
-                        ),
-                    },
-                )
+            # Gather with progress reporting under timeout envelope
+            async def _process_chunks() -> list[str]:
+                for completed_count, coro in enumerate(
+                    asyncio.as_completed(tasks), start=1
+                ):
+                    await coro
+                    progress = int(15 + (completed_count / total_chunks) * 75)
+                    await self.update_job(
+                        job_id,
+                        {
+                            "progress": progress,
+                            "chunks_completed": completed_count,
+                            "message": (
+                                f"Converted chunk {completed_count} of {total_chunks} "
+                                f"({progress}%)..."
+                            ),
+                        },
+                    )
+                return await asyncio.gather(*tasks)
 
-            # Re-collect results in strict order
-            ordered_results = await asyncio.gather(*tasks)
+            settings = get_settings()
+            ordered_results = await asyncio.wait_for(
+                _process_chunks(),
+                timeout=float(settings.CONVERSION_TIMEOUT_SECONDS),
+            )
 
             # 3. Merging phase
             await self.update_job(
@@ -264,6 +251,28 @@ class JobManager:
                 chunks=total_chunks,
                 time_ms=elapsed_ms,
             )
+
+        except TimeoutError:
+            logger.error("parallel_job_timeout", job_id=job_id)
+            settings = get_settings()
+            await self.update_job(
+                job_id,
+                {
+                    "status": JobStatus.FAILED.value,
+                    "error": (
+                        f"Conversion timed out after "
+                        f"{settings.CONVERSION_TIMEOUT_SECONDS} seconds."
+                    ),
+                },
+            )
+            # Replace the pool
+            global _executor
+            if _executor is not None:
+                _executor.shutdown(wait=False, cancel_futures=True)
+                _executor = None
+            # shortcut: hung worker process is orphaned until it exits, upgrade
+            # to per-task processes if this shows up in logs
+            return
 
         except Exception as exc:
             logger.error(

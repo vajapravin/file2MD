@@ -7,14 +7,8 @@ import structlog
 from fastapi import HTTPException, status
 
 from file2md.config import get_settings
-from file2md.converters.base import BaseConverter
-from file2md.converters.csv_converter import CsvConverter
-from file2md.converters.docx import DocxConverter
-from file2md.converters.html import HtmlConverter
-from file2md.converters.json_converter import JsonConverter
-from file2md.converters.markdown import MarkdownNormalizer
-from file2md.converters.pdf import PdfConverter
-from file2md.converters.txt import TxtConverter
+from file2md.converters import CONVERTERS
+from file2md.services.job_manager import _convert_chunk_task, get_process_executor
 
 logger = structlog.get_logger()
 
@@ -23,17 +17,7 @@ class ConversionOrchestrator:
     """Manages converter strategies and executes conversions within sandboxes."""
 
     def __init__(self) -> None:
-        self._converters: dict[str, BaseConverter] = {
-            ".pdf": PdfConverter(),
-            ".docx": DocxConverter(),
-            ".txt": TxtConverter(),
-            ".html": HtmlConverter(),
-            ".htm": HtmlConverter(),
-            ".csv": CsvConverter(),
-            ".json": JsonConverter(),
-            ".md": MarkdownNormalizer(),
-            ".markdown": MarkdownNormalizer(),
-        }
+        self._converters = CONVERTERS
 
     async def convert(
         self, file_path: Path, extension: str, original_filename: str
@@ -55,10 +39,17 @@ class ConversionOrchestrator:
             filename=original_filename,
         )
 
+        loop = asyncio.get_running_loop()
         try:
-            # Run CPU/parser synchronous work in thread pool with strict timeout
+            # Run CPU/parser synchronous work in process pool with strict timeout
             markdown = await asyncio.wait_for(
-                asyncio.to_thread(converter.convert, file_path),
+                loop.run_in_executor(
+                    get_process_executor(),
+                    _convert_chunk_task,
+                    str(file_path),
+                    ext,
+                    original_filename,
+                ),
                 timeout=float(settings.CONVERSION_TIMEOUT_SECONDS),
             )
 

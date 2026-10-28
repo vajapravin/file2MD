@@ -1,5 +1,6 @@
 """Document splitting services for parallel processing of large files."""
 
+import csv
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -52,8 +53,9 @@ def should_split_document(file_path: Path, ext: str, size_bytes: int) -> bool:
     # For CSVs, also check row count even if file is compact
     if ext.lower() == ".csv":
         try:
-            with open(file_path, encoding="utf-8", errors="ignore") as f:
-                for count, _ in enumerate(f):
+            with open(file_path, newline="", encoding="utf-8", errors="ignore") as f:
+                csv_reader = csv.reader(f)
+                for count, _ in enumerate(csv_reader):
                     if count >= settings.CSV_CHUNK_ROW_SIZE * 3:
                         return True
         except Exception as exc:
@@ -168,24 +170,23 @@ def split_csv(
     settings = get_settings()
     chunk_size = rows_per_chunk or settings.CSV_CHUNK_ROW_SIZE
 
-    with open(file_path, encoding="utf-8", errors="replace") as f:
-        lines = f.readlines()
+    with open(file_path, newline="", encoding="utf-8", errors="replace") as f:
+        reader = csv.reader(f)
+        try:
+            header = next(reader)
+        except StopIteration:
+            return [
+                DocumentChunk(
+                    chunk_index=0,
+                    total_chunks=1,
+                    file_path=file_path,
+                    extension=".csv",
+                    metadata={"rows": 0},
+                )
+            ]
+        data_rows = list(reader)
 
-    if len(lines) <= 1:
-        return [
-            DocumentChunk(
-                chunk_index=0,
-                total_chunks=1,
-                file_path=file_path,
-                extension=".csv",
-                metadata={"rows": len(lines)},
-            )
-        ]
-
-    header = lines[0]
-    data_rows = lines[1:]
     total_data_rows = len(data_rows)
-
     if total_data_rows <= chunk_size:
         return [
             DocumentChunk(
@@ -193,7 +194,7 @@ def split_csv(
                 total_chunks=1,
                 file_path=file_path,
                 extension=".csv",
-                metadata={"rows": len(lines)},
+                metadata={"rows": total_data_rows + 1},
             )
         ]
 
@@ -204,9 +205,10 @@ def split_csv(
         chunk_rows = data_rows[start_idx : start_idx + chunk_size]
         chunk_path = output_dir / f"chunk_{idx:04d}.csv"
 
-        with open(chunk_path, "w", encoding="utf-8") as f_out:
-            f_out.write(header)
-            f_out.writelines(chunk_rows)
+        with open(chunk_path, "w", newline="", encoding="utf-8") as f_out:
+            writer = csv.writer(f_out)
+            writer.writerow(header)
+            writer.writerows(chunk_rows)
 
         chunks.append(
             DocumentChunk(

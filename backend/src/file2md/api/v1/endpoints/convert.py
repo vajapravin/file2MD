@@ -114,7 +114,10 @@ async def convert_file(
     try:
         # Check whether to trigger parallel splitting
         is_parallel = (mode == "async") or (
-            mode != "sync" and should_split_document(temp_file, ext, size_bytes)
+            mode != "sync"
+            and await asyncio.to_thread(
+                should_split_document, temp_file, ext, size_bytes
+            )
         )
 
         if is_parallel:

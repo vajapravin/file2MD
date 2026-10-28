@@ -123,3 +123,29 @@ def test_split_pdf_falls_back_on_unreadable_file() -> None:
         assert len(chunks) == 1
         assert chunks[0].chunk_index == 0
         assert chunks[0].file_path == corrupted_pdf
+
+
+def test_split_csv_preserves_quoted_newline_across_chunks() -> None:
+    csv_content = (
+        "id,description,status\r\n"
+        '1,"Row 1 single line",ok\r\n'
+        '2,"Row 2 with\nembedded newline",active\r\n'
+        '3,"Row 3 final",done\r\n'
+    )
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text(csv_content, encoding="utf-8")
+        out_dir = tmp_path / "chunks"
+        out_dir.mkdir()
+
+        chunks = split_csv(csv_file, out_dir, rows_per_chunk=2)
+        assert len(chunks) == 2
+
+        chunk0_text = chunks[0].file_path.read_text(encoding="utf-8")
+        assert chunk0_text.startswith("id,description,status")
+        assert "embedded newline" in chunk0_text
+
+        chunk1_text = chunks[1].file_path.read_text(encoding="utf-8")
+        assert chunk1_text.startswith("id,description,status")
+        assert "3,Row 3 final,done" in chunk1_text
