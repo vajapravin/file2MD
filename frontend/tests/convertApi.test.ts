@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { convertSingleFile } from "../src/services/convertApi";
+import { convertSingleFile, convertUrl } from "../src/services/convertApi";
 
 describe("convertSingleFile", () => {
   const originalFetch = globalThis.fetch;
@@ -140,6 +140,52 @@ describe("convertSingleFile", () => {
     });
     await expect(convertSingleFile(file)).rejects.toThrow(
       "File conversion failed (Bad Gateway).",
+    );
+  });
+});
+
+describe("convertUrl", () => {
+  it("converts public web page URL to clean Markdown", async () => {
+    const mockResponse = {
+      filename: "Markdown_Article.html",
+      original_format: "url",
+      markdown: "# Markdown Spec\n\nConverted text.",
+      metadata: {
+        size_bytes: 1200,
+        conversion_time_ms: 180,
+      },
+    };
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue(mockResponse),
+    } as unknown as Response);
+
+    const result = await convertUrl("https://en.wikipedia.org/wiki/Markdown");
+    expect(result.original_format).toBe("url");
+    expect(result.markdown).toContain("Markdown Spec");
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/convert/url"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ url: "https://en.wikipedia.org/wiki/Markdown" }),
+      }),
+    );
+  });
+
+  it("handles forbidden private network address errors", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: "Bad Request",
+      json: vi.fn().mockResolvedValue({
+        detail: "Access to private or local network addresses is prohibited.",
+      }),
+    } as unknown as Response);
+
+    await expect(convertUrl("http://192.168.1.1/admin")).rejects.toThrow(
+      "Access to private or local network addresses is prohibited.",
     );
   });
 });

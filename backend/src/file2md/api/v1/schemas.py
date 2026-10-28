@@ -42,6 +42,18 @@ class ConvertResponse(BaseModel):
     metadata: ConvertMetadata
 
 
+class ConvertUrlRequest(BaseModel):
+    """Request model for URL to Markdown conversion."""
+
+    url: str = Field(
+        ...,
+        description=(
+            "Target web page URL (HTTP or HTTPS) to fetch and convert to Markdown"
+        ),
+        examples=["https://en.wikipedia.org/wiki/Markdown"],
+    )
+
+
 class BatchConvertItem(BaseModel):
     """Individual item result in a batch conversion response."""
 

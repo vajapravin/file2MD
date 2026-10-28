@@ -369,6 +369,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "markitdown", extra = ["docx", "pdf"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -393,6 +394,7 @@ dev = [
 requires-dist = [
     { name = "coverage", marker = "extra == 'dev'", specifier = "~=7.6.0" },
     { name = "fastapi", specifier = "~=0.115.0" },
+    { name = "httpx", specifier = "~=0.28.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = "~=0.28.0" },
     { name = "markitdown", extras = ["pdf", "docx"], specifier = "~=0.1.8" },
     { name = "mypy", marker = "extra == 'dev'", specifier = "~=1.13.0" },

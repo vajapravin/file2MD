@@ -17,6 +17,7 @@ from file2md.api.v1.schemas import (
     BatchConvertResponse,
     ConvertMetadata,
     ConvertResponse,
+    ConvertUrlRequest,
 )
 from file2md.services.converter import orchestrator
 from file2md.services.file_cleanup import (
@@ -25,6 +26,7 @@ from file2md.services.file_cleanup import (
 )
 from file2md.services.job_manager import job_manager
 from file2md.services.splitter import should_split_document
+from file2md.services.url_fetcher import fetch_url_content
 from file2md.services.validators import (
     sanitize_filename,
     validate_file_metadata,
@@ -259,3 +261,37 @@ async def convert_batch(files: list[UploadFile] = File(...)) -> BatchConvertResp
             )
 
     return BatchConvertResponse(results=results)
+
+
+@router.post(
+    "/convert/url",
+    response_model=ConvertResponse,
+    summary="Convert a web page URL to clean Markdown",
+    description=(
+        "Safely fetches HTML content from a verified HTTP/HTTPS URL with strict "
+        "SSRF protection and converts it to clean, structured Markdown."
+    ),
+)
+async def convert_url(request: ConvertUrlRequest) -> ConvertResponse:
+    start_time = time.perf_counter()
+
+    html_content, suggested_name = await fetch_url_content(request.url)
+    content_bytes = html_content.encode("utf-8")
+    size_bytes = len(content_bytes)
+
+    async with isolated_temp_directory() as temp_dir:
+        temp_file = temp_dir / suggested_name
+        temp_file.write_bytes(content_bytes)
+        markdown = await orchestrator.convert(temp_file, ".html", suggested_name)
+
+    elapsed_ms = int((time.perf_counter() - start_time) * 1000)
+
+    return ConvertResponse(
+        filename=suggested_name,
+        original_format="url",
+        markdown=markdown,
+        metadata=ConvertMetadata(
+            size_bytes=size_bytes,
+            conversion_time_ms=elapsed_ms,
+        ),
+    )

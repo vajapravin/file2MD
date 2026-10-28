@@ -61,6 +61,8 @@ file2MD separates concerns across distinct layers to ensure security, maintainab
 
 - **Multi-format support** — converts PDF, Word (`.docx`), Plain Text (`.txt`),
   HTML (`.html`), CSV (`.csv`), JSON (`.json`), and normalizes existing Markdown (`.md`).
+- **URL to Markdown** — directly convert live web pages into clean, structured Markdown
+  with built-in SSRF and private-network protection.
 - **Structure preservation** — maintains headings, paragraphs, bullet/numbered
   lists, nested tables, code fences, and hyperlinks.
 - **Interactive Markdown preview** — side-by-side or tabbed view showing rendered
@@ -194,6 +196,7 @@ npm run typecheck
 ## 🗺 Roadmap
 
 - [x] Initial multi-format engine (PDF, DOCX, TXT, HTML, CSV, JSON, MD)
+- [x] URL to Markdown conversion with SSRF and private-network protection
 - [x] Live side-by-side Markdown preview and clipboard copy
 - [x] Strict security sandbox, signature validation, and timeout limits
 - [ ] OCR extraction for images using vision models / Tesseract

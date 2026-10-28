@@ -47,7 +47,8 @@ export interface BatchConvertResponse {
 
 export interface UploadedFileItem {
   id: string;
-  file: File;
+  file?: File;
+  sourceUrl?: string;
   name: string;
   size: number;
   format: string;

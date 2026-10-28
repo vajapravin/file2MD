@@ -90,3 +90,25 @@ export async function convertSingleFile(
 
   return data as ConvertResponse;
 }
+
+export async function convertUrl(url: string): Promise<ConvertResponse> {
+  const res = await fetch(`${API_BASE}/convert/url`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ url: url.trim() }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(
+      data.detail ||
+        data.error ||
+        `URL conversion failed (${res.statusText || res.status}).`,
+    );
+  }
+
+  return data as ConvertResponse;
+}
