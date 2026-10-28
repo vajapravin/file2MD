@@ -2,12 +2,13 @@
 
 import re
 from pathlib import Path
-from typing import Dict, List, Set
+
 from fastapi import HTTPException, status
+
 from file2md.config import get_settings
 
 # Whitelisted extensions and corresponding valid MIME types
-SUPPORTED_EXTENSIONS: Dict[str, Set[str]] = {
+SUPPORTED_EXTENSIONS: dict[str, set[str]] = {
     ".pdf": {"application/pdf"},
     ".docx": {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -23,14 +24,14 @@ SUPPORTED_EXTENSIONS: Dict[str, Set[str]] = {
     ".markdown": {"text/markdown", "text/x-markdown", "text/plain"},
 }
 
-MAGIC_SIGNATURES: Dict[str, bytes] = {
+MAGIC_SIGNATURES: dict[str, bytes] = {
     ".pdf": b"%PDF",
     ".docx": b"PK\x03\x04",
 }
 
 
 def sanitize_filename(raw_filename: str) -> str:
-    """Sanitize filename to prevent directory traversal and remove dangerous characters."""
+    """Sanitize filename to prevent traversal and remove dangerous chars."""
     if not raw_filename or not raw_filename.strip():
         return "unnamed_document"
 
@@ -95,5 +96,8 @@ def validate_file_signature(ext: str, header_bytes: bytes) -> None:
         if not header_bytes.startswith(expected):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File content does not match expected {ext.upper()} file signature.",
+                detail=(
+                    f"File content does not match expected {ext.upper()} "
+                    f"file signature."
+                ),
             )

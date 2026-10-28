@@ -37,14 +37,15 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         onFilesSelected(validFiles);
       }
     },
-    [onFilesSelected, onError]
+    [onFilesSelected, onError],
   );
 
-  const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
-    onDrop,
-    disabled: isProcessing,
-    multiple: true,
-  });
+  const { getRootProps, getInputProps, isDragActive, isDragReject } =
+    useDropzone({
+      onDrop,
+      disabled: isProcessing,
+      multiple: true,
+    });
 
   return (
     <div
@@ -53,8 +54,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         isDragActive
           ? "border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 scale-[1.01]"
           : isDragReject
-          ? "border-red-500 bg-red-50/50 dark:bg-red-950/20"
-          : "border-slate-300 dark:border-slate-700/80 bg-white/60 dark:bg-slate-900/40 hover:border-indigo-400 dark:hover:border-indigo-500/80 hover:bg-slate-50/70 dark:hover:bg-slate-800/40"
+            ? "border-red-500 bg-red-50/50 dark:bg-red-950/20"
+            : "border-slate-300 dark:border-slate-700/80 bg-white/60 dark:bg-slate-900/40 hover:border-indigo-400 dark:hover:border-indigo-500/80 hover:bg-slate-50/70 dark:hover:bg-slate-800/40"
       }`}
     >
       <input {...getInputProps()} />
@@ -83,11 +84,17 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       </h3>
 
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 max-w-md mx-auto">
-        Supports PDF, Word (.docx), Plain Text, HTML, CSV, JSON, and Markdown cleanup.
+        Supports PDF, Word (.docx), Plain Text, HTML, CSV, JSON, and Markdown
+        cleanup.
       </p>
 
       <div className="inline-flex items-center space-x-2 text-xs font-medium text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/60 px-3 py-1.5 rounded-full">
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          className="w-3.5 h-3.5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"

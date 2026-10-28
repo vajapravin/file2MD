@@ -1,10 +1,9 @@
 """Markdown stitching and normalization for parallel document chunks."""
 
 import re
-from typing import List
 
 
-def merge_csv_tables(table_markdowns: List[str]) -> str:
+def merge_csv_tables(table_markdowns: list[str]) -> str:
     """Merge multiple Markdown tables generated from CSV chunks into a single table.
 
     The first chunk provides the header and separator rows. Subsequent chunks have
@@ -16,7 +15,7 @@ def merge_csv_tables(table_markdowns: List[str]) -> str:
     if len(table_markdowns) == 1:
         return table_markdowns[0].strip()
 
-    combined_rows: List[str] = []
+    combined_rows: list[str] = []
 
     for idx, table_md in enumerate(table_markdowns):
         lines = [line.strip() for line in table_md.strip().split("\n") if line.strip()]
@@ -42,8 +41,8 @@ def merge_csv_tables(table_markdowns: List[str]) -> str:
     return "\n".join(combined_rows).strip()
 
 
-def merge_markdown_chunks(chunk_markdowns: List[str], extension: str) -> str:
-    """Stitch multiple converted Markdown chunks into a single unified Markdown document.
+def merge_markdown_chunks(chunk_markdowns: list[str], extension: str) -> str:
+    """Stitch converted Markdown chunks into a single unified document.
 
     Args:
         chunk_markdowns: Ordered list of Markdown strings from each chunk.

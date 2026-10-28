@@ -1,11 +1,19 @@
-import { ConvertResponse, BatchConvertResponse, FormatInfo, AsyncJobResponse } from "../types";
+import {
+  ConvertResponse,
+  BatchConvertResponse,
+  FormatInfo,
+  AsyncJobResponse,
+} from "../types";
 
 // Default to relative "/api/v1" so it works across both local development and production domains
 const API_BASE = import.meta.env.VITE_API_BASE_URL
   ? `${import.meta.env.VITE_API_BASE_URL.replace(/\/$/, "")}/api/v1`
   : "/api/v1";
 
-export async function fetchHealth(): Promise<{ status: string; version: string }> {
+export async function fetchHealth(): Promise<{
+  status: string;
+  version: string;
+}> {
   const res = await fetch(`${API_BASE}/health`);
   if (!res.ok) {
     throw new Error(`Health check failed: ${res.statusText}`);
@@ -26,14 +34,16 @@ export async function fetchJobStatus(jobId: string): Promise<AsyncJobResponse> {
   const res = await fetch(`${API_BASE}/jobs/${jobId}`);
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || `Failed to fetch job status (${res.statusText})`);
+    throw new Error(
+      errorData.detail || `Failed to fetch job status (${res.statusText})`,
+    );
   }
   return res.json();
 }
 
 export async function convertSingleFile(
   file: File,
-  onProgress?: (job: AsyncJobResponse) => void
+  onProgress?: (job: AsyncJobResponse) => void,
 ): Promise<ConvertResponse> {
   const formData = new FormData();
   formData.append("file", file, file.name);
@@ -71,7 +81,9 @@ export async function convertSingleFile(
             },
           };
         }
-        throw new Error("Parallel conversion completed but no output was found.");
+        throw new Error(
+          "Parallel conversion completed but no output was found.",
+        );
       }
 
       if (job.status === "failed") {
@@ -89,7 +101,9 @@ export async function convertSingleFile(
   return data as ConvertResponse;
 }
 
-export async function convertBatchFiles(files: File[]): Promise<BatchConvertResponse> {
+export async function convertBatchFiles(
+  files: File[],
+): Promise<BatchConvertResponse> {
   const formData = new FormData();
   files.forEach((file) => formData.append("files", file, file.name));
 

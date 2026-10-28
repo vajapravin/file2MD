@@ -1,8 +1,10 @@
 """API tests for the file conversion endpoint."""
 
 import io
+
 import pytest
 from httpx import ASGITransport, AsyncClient
+
 from file2md.main import app
 
 
@@ -91,7 +93,9 @@ async def test_convert_rejects_unsupported_format() -> None:
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/api/v1/convert",
-            files={"file": ("script.sh", io.BytesIO(b"echo hello"), "application/x-sh")},
+            files={
+                "file": ("script.sh", io.BytesIO(b"echo hello"), "application/x-sh")
+            },
         )
 
     assert response.status_code == 400
@@ -103,6 +107,7 @@ async def test_convert_async_cleans_temp_dir_on_create_job_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from pathlib import Path
+
     from file2md.services.job_manager import job_manager
 
     base_dir = Path("/tmp/file2md")
@@ -115,9 +120,7 @@ async def test_convert_async_cleans_temp_dir_on_create_job_failure(
 
     content = b"# Test Markdown"
     transport = ASGITransport(app=app, raise_app_exceptions=False)
-    async with AsyncClient(
-        transport=transport, base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/api/v1/convert?mode=async",
             files={"file": ("test.md", io.BytesIO(content), "text/markdown")},
@@ -133,6 +136,7 @@ async def test_convert_cleans_temp_dir_on_should_split_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from pathlib import Path
+
     import file2md.api.v1.endpoints.convert as convert_module
 
     base_dir = Path("/tmp/file2md")
@@ -145,9 +149,7 @@ async def test_convert_cleans_temp_dir_on_should_split_failure(
 
     content = b"# Test Markdown"
     transport = ASGITransport(app=app, raise_app_exceptions=False)
-    async with AsyncClient(
-        transport=transport, base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
             "/api/v1/convert?mode=auto",
             files={"file": ("test.md", io.BytesIO(content), "text/markdown")},

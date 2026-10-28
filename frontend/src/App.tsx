@@ -54,7 +54,11 @@ export function App() {
   const convertFileItem = async (item: UploadedFileItem) => {
     // Set status to uploading
     setFiles((prev) =>
-      prev.map((f) => (f.id === item.id ? { ...f, status: "uploading", progress: 0, error: undefined } : f))
+      prev.map((f) =>
+        f.id === item.id
+          ? { ...f, status: "uploading", progress: 0, error: undefined }
+          : f,
+      ),
     );
 
     try {
@@ -70,8 +74,8 @@ export function App() {
                   processedChunks: job.chunks_completed,
                   jobMessage: job.message,
                 }
-              : f
-          )
+              : f,
+          ),
         );
       });
 
@@ -85,8 +89,8 @@ export function App() {
                 markdown: response.markdown,
                 metadata: response.metadata,
               }
-            : f
-        )
+            : f,
+        ),
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Conversion failed.";
@@ -98,8 +102,8 @@ export function App() {
                 status: "error",
                 error: msg,
               }
-            : f
-        )
+            : f,
+        ),
       );
     }
   };
@@ -133,7 +137,9 @@ export function App() {
   };
 
   const handleConvertAll = async () => {
-    const idleFiles = files.filter((f) => f.status === "idle" || f.status === "error");
+    const idleFiles = files.filter(
+      (f) => f.status === "idle" || f.status === "error",
+    );
     if (idleFiles.length === 0) return;
 
     setIsConverting(true);
@@ -163,11 +169,7 @@ export function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
-      <Navbar
-        isHealthy={isHealthy}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-      />
+      <Navbar isHealthy={isHealthy} theme={theme} onToggleTheme={toggleTheme} />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
@@ -177,8 +179,8 @@ export function App() {
             Convert Any Document to Clean Markdown
           </h2>
           <p className="mt-3 text-sm sm:text-base text-slate-600 dark:text-slate-400">
-            Preserve headers, tables, links, and text structure without external cloud tracking.
-            Powered by Microsoft's MarkItDown engine.
+            Preserve headers, tables, links, and text structure without external
+            cloud tracking. Powered by Microsoft's MarkItDown engine.
           </p>
 
           <FormatBadges />

@@ -2,9 +2,15 @@
 
 import tempfile
 from pathlib import Path
+
 from pypdf import PdfWriter
+
 from file2md.services.merger import merge_csv_tables, merge_markdown_chunks
-from file2md.services.splitter import should_split_document, split_csv, split_pdf, split_text
+from file2md.services.splitter import (
+    split_csv,
+    split_pdf,
+    split_text,
+)
 
 
 def create_dummy_pdf(path: Path, num_pages: int) -> None:
@@ -107,7 +113,9 @@ def test_split_pdf_falls_back_on_unreadable_file() -> None:
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
         corrupted_pdf = tmp_path / "corrupted.pdf"
-        corrupted_pdf.write_bytes(b"%PDF-1.4\nCorrupted content without valid xref table")
+        corrupted_pdf.write_bytes(
+            b"%PDF-1.4\nCorrupted content without valid xref table"
+        )
         output_dir = tmp_path / "chunks"
         output_dir.mkdir()
 

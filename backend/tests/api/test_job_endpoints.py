@@ -2,14 +2,19 @@
 
 import asyncio
 import io
+
 import pytest
 from httpx import ASGITransport, AsyncClient
+
 from file2md.main import app
 
 
 @pytest.mark.asyncio
 async def test_convert_async_mode_returns_202_and_completes() -> None:
-    content = b"# Asynchronous Document\n\nThis is processed via parallel worker pipeline."
+    content = (
+        b"# Asynchronous Document\n\n"
+        b"This is processed via parallel worker pipeline."
+    )
     transport = ASGITransport(app=app)
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -22,7 +27,12 @@ async def test_convert_async_mode_returns_202_and_completes() -> None:
         assert response.status_code == 202
         job_data = response.json()
         assert "job_id" in job_data
-        assert job_data["status"] in {"pending", "splitting", "processing", "completed"}
+        assert job_data["status"] in {
+            "pending",
+            "splitting",
+            "processing",
+            "completed",
+        }
 
         job_id = job_data["job_id"]
 
@@ -52,8 +62,10 @@ async def test_get_nonexistent_job_returns_404() -> None:
 
 
 @pytest.mark.asyncio
-async def test_parallel_job_fallback_recovers_to_completion(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Verify that if splitting or chunking fails, the job falls back to single-pass and completes."""
+async def test_parallel_job_fallback_recovers_to_completion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify fallback to single-pass completes if chunking fails."""
     from file2md.services import job_manager as jm_mod
 
     # Simulate an error during splitting (e.g. RecursionError)

@@ -1,7 +1,9 @@
 """CSV to Markdown table converter using MarkItDown."""
 
 from pathlib import Path
+
 from markitdown import MarkItDown
+
 from file2md.converters.base import BaseConverter
 
 

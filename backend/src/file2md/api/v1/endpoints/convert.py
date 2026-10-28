@@ -5,10 +5,12 @@ import shutil
 import time
 import uuid
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
+
+import structlog
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse
-import structlog
+
 from file2md.api.v1.schemas import (
     AsyncJobResponse,
     BatchConvertItem,
@@ -40,7 +42,7 @@ async def _run_parallel_job_with_cleanup(
     temp_dir: Path,
     start_time: float,
 ) -> None:
-    """Execute parallel job in background and ensure temp directory cleanup upon completion."""
+    """Execute parallel job in background and clean up temp directory."""
     try:
         await job_manager.execute_parallel_job(
             job_id, file_path, ext, safe_name, temp_dir, start_time
@@ -50,27 +52,40 @@ async def _run_parallel_job_with_cleanup(
             if temp_dir.exists():
                 shutil.rmtree(temp_dir)
         except Exception as exc:
-            logger.warning("async_temp_cleanup_failed", temp_dir=str(temp_dir), error=str(exc))
+            logger.warning(
+                "async_temp_cleanup_failed",
+                temp_dir=str(temp_dir),
+                error=str(exc),
+            )
 
 
 @router.post(
     "/convert",
     summary="Convert a single file to Markdown (Sync or Parallel Async)",
     description=(
-        "Converts a document to Markdown. Large files or multi-page documents are automatically "
-        "split and processed in parallel across worker processes, returning an HTTP 202 Accepted "
-        "job with real-time status polling."
+        "Converts a document to Markdown. Large files or multi-page documents "
+        "are automatically split and processed in parallel across worker "
+        "processes, returning an HTTP 202 Accepted job with status polling."
     ),
     responses={
-        200: {"model": ConvertResponse, "description": "Instant synchronous conversion result"},
-        202: {"model": AsyncJobResponse, "description": "Asynchronous parallel chunking job created"},
+        200: {
+            "model": ConvertResponse,
+            "description": "Instant synchronous conversion result",
+        },
+        202: {
+            "model": AsyncJobResponse,
+            "description": "Asynchronous parallel chunking job created",
+        },
     },
 )
 async def convert_file(
     file: UploadFile = File(...),
-    mode: Optional[str] = Query(
+    mode: str | None = Query(
         default="auto",
-        description="Conversion execution mode: 'auto' (split if large), 'sync' (force single-pass), 'async'",
+        description=(
+            "Conversion execution mode: 'auto' (split if large), "
+            "'sync' (force single-pass), 'async'"
+        ),
     ),
 ) -> Any:
     start_time = time.perf_counter()
@@ -87,7 +102,7 @@ async def convert_file(
     validate_file_signature(ext, content[:16])
 
     # Create isolated temp folder
-    base_dir = Path("/tmp/file2md")
+    base_dir = Path("/tmp/file2md")  # noqa: S108 - dedicated temporary directory
     base_dir.mkdir(parents=True, exist_ok=True)
     session_id = uuid.uuid4().hex
     temp_dir = base_dir / session_id
@@ -139,7 +154,11 @@ async def convert_file(
             if temp_dir.exists():
                 shutil.rmtree(temp_dir)
         except Exception as exc:
-            logger.warning("sync_temp_cleanup_failed", temp_dir=str(temp_dir), error=str(exc))
+            logger.warning(
+                "sync_temp_cleanup_failed",
+                temp_dir=str(temp_dir),
+                error=str(exc),
+            )
 
     elapsed_ms = int((time.perf_counter() - start_time) * 1000)
 
@@ -158,7 +177,10 @@ async def convert_file(
     "/jobs/{job_id}",
     response_model=AsyncJobResponse,
     summary="Get status and progress of an asynchronous/split conversion job",
-    description="Polls real-time progress of parallel chunk conversion and retrieves final Markdown upon completion.",
+    description=(
+        "Polls real-time progress of parallel chunk conversion and retrieves "
+        "final Markdown upon completion."
+    ),
 )
 async def get_job_status(job_id: str) -> AsyncJobResponse:
     job = await job_manager.get_job(job_id)
@@ -176,14 +198,14 @@ async def get_job_status(job_id: str) -> AsyncJobResponse:
     summary="Batch convert multiple files to Markdown",
     description="Converts multiple files and returns individual conversion results.",
 )
-async def convert_batch(files: List[UploadFile] = File(...)) -> BatchConvertResponse:
+async def convert_batch(files: list[UploadFile] = File(...)) -> BatchConvertResponse:
     if not files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No files were provided for batch conversion.",
         )
 
-    results: List[BatchConvertItem] = []
+    results: list[BatchConvertItem] = []
 
     for file in files:
         start_time = time.perf_counter()
@@ -228,7 +250,10 @@ async def convert_batch(files: List[UploadFile] = File(...)) -> BatchConvertResp
                 BatchConvertItem(
                     filename=safe_name,
                     status="error",
-                    error="Conversion failed due to an unexpected document parsing error.",
+                    error=(
+                        "Conversion failed due to an unexpected document "
+                        "parsing error."
+                    ),
                 )
             )
 

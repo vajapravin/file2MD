@@ -2,9 +2,10 @@
 
 import asyncio
 from pathlib import Path
-from typing import Dict
-from fastapi import HTTPException, status
+
 import structlog
+from fastapi import HTTPException, status
+
 from file2md.config import get_settings
 from file2md.converters.base import BaseConverter
 from file2md.converters.csv_converter import CsvConverter
@@ -19,10 +20,10 @@ logger = structlog.get_logger()
 
 
 class ConversionOrchestrator:
-    """Manages converter strategies and executes conversions within isolation sandboxes."""
+    """Manages converter strategies and executes conversions within sandboxes."""
 
     def __init__(self) -> None:
-        self._converters: Dict[str, BaseConverter] = {
+        self._converters: dict[str, BaseConverter] = {
             ".pdf": PdfConverter(),
             ".docx": DocxConverter(),
             ".txt": TxtConverter(),
@@ -34,7 +35,9 @@ class ConversionOrchestrator:
             ".markdown": MarkdownNormalizer(),
         }
 
-    async def convert(self, file_path: Path, extension: str, original_filename: str) -> str:
+    async def convert(
+        self, file_path: Path, extension: str, original_filename: str
+    ) -> str:
         """Execute conversion with timeout and error classification."""
         settings = get_settings()
         ext = extension.lower()
@@ -62,7 +65,10 @@ class ConversionOrchestrator:
             if not markdown or not markdown.strip():
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=f"Conversion produced empty Markdown for '{original_filename}'.",
+                    detail=(
+                        f"Conversion produced empty Markdown for "
+                        f"'{original_filename}'."
+                    ),
                 )
 
             logger.info(
@@ -72,30 +78,46 @@ class ConversionOrchestrator:
             )
             return markdown
 
-        except asyncio.TimeoutError as exc:
-            logger.error("conversion_timeout", filename=original_filename, extension=ext)
+        except TimeoutError as exc:
+            logger.error(
+                "conversion_timeout",
+                filename=original_filename,
+                extension=ext,
+            )
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Conversion timed out after {settings.CONVERSION_TIMEOUT_SECONDS} seconds.",
+                detail=(
+                    f"Conversion timed out after "
+                    f"{settings.CONVERSION_TIMEOUT_SECONDS} seconds."
+                ),
             ) from exc
 
         except HTTPException:
             raise
 
         except ValueError as exc:
-            logger.warning("conversion_value_error", error=str(exc), filename=original_filename)
+            logger.warning(
+                "conversion_value_error",
+                error=str(exc),
+                filename=original_filename,
+            )
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=str(exc),
             ) from exc
 
         except Exception as exc:
-            logger.error("conversion_error", error=str(exc), filename=original_filename)
+            logger.error(
+                "conversion_error",
+                error=str(exc),
+                filename=original_filename,
+            )
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=(
-                    f"Failed to convert '{original_filename}'. The file may be corrupt, "
-                    f"password-protected, or in an unsupported sub-format."
+                    f"Failed to convert '{original_filename}'. The file may "
+                    f"be corrupt, password-protected, or in an unsupported "
+                    f"sub-format."
                 ),
             ) from exc
 

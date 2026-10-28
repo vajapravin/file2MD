@@ -1,7 +1,9 @@
 """PDF to Markdown converter using MarkItDown."""
 
 from pathlib import Path
+
 from markitdown import MarkItDown
+
 from file2md.converters.base import BaseConverter
 
 
@@ -13,6 +15,7 @@ class PdfConverter(BaseConverter):
 
     def convert(self, file_path: Path) -> str:
         import sys
+
         sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
 
         result = self._engine.convert(str(file_path))

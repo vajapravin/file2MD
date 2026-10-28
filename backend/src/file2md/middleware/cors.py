@@ -1,11 +1,10 @@
 """CORS configuration middleware."""
 
-from typing import List
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 
-def setup_cors(app: FastAPI, allowed_origins: List[str]) -> None:
+def setup_cors(app: FastAPI, allowed_origins: list[str]) -> None:
     """Attach CORSMiddleware with strictly configured allowed origins."""
     app.add_middleware(
         CORSMiddleware,

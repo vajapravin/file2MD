@@ -12,7 +12,9 @@ def register_error_handlers(app: FastAPI) -> None:
     """Register custom exception handlers with the FastAPI application."""
 
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    async def http_exception_handler(
+        request: Request, exc: HTTPException
+    ) -> JSONResponse:
         logger.warning(
             "http_exception",
             status_code=exc.status_code,
@@ -47,7 +49,9 @@ def register_error_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(Exception)
-    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    async def unhandled_exception_handler(
+        request: Request, exc: Exception
+    ) -> JSONResponse:
         logger.error(
             "unhandled_exception",
             exc_info=True,

@@ -2,15 +2,17 @@
 
 import logging
 import sys
+
 import structlog
 from fastapi import FastAPI
 
-# Raise recursion limit to prevent recursion errors on deeply nested PDF/HTML trees
-sys.setrecursionlimit(10000)
 from file2md.api.v1.router import api_v1_router
 from file2md.config import Settings, get_settings
 from file2md.middleware.cors import setup_cors
 from file2md.middleware.error_handler import register_error_handlers
+
+# Raise recursion limit to prevent recursion errors on deeply nested PDF/HTML trees
+sys.setrecursionlimit(10000)
 
 
 def configure_logging(settings: Settings) -> None:
@@ -43,7 +45,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="file2MD API",
         version=settings.APP_VERSION,
-        description="Modular service for converting multi-format files to clean Markdown using markitdown.",
+        description=(
+            "Modular service for converting multi-format files to clean "
+            "Markdown using markitdown."
+        ),
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",

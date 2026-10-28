@@ -1,10 +1,10 @@
 """Application configuration managed via pydantic-settings."""
 
 from functools import lru_cache
-from typing import List, Union
+from typing import Annotated
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     APP_LOG_LEVEL: str = "INFO"
 
     # --- Server ---
-    HOST: str = "0.0.0.0"
+    HOST: str = "0.0.0.0"  # noqa: S104 - default server listen host
     PORT: int = 8086
 
     # --- Upload & Processing Limits ---
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     TXT_CHUNK_LINE_SIZE: int = 2000  # lines per chunk
 
     # --- CORS ---
-    CORS_ALLOWED_ORIGINS: Union[List[str], str] = [
+    CORS_ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = [
         "http://localhost:5173",
         "https://file2md.vajapravin.me",
         "http://file2md.vajapravin.me",
@@ -52,7 +52,7 @@ class Settings(BaseSettings):
 
     @field_validator("CORS_ALLOWED_ORIGINS", mode="before")
     @classmethod
-    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
+    def assemble_cors_origins(cls, v: str | list[str]) -> list[str]:
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
